@@ -48,10 +48,10 @@ spec:
       env:
         # S3バケット名 (必須)
         - name: S3FS_BUCKET
-          value: "my-bucket"
+          value: "fuse-s3fs"
         # S3エンドポイントURL (必須)
         - name: S3FS_ENDPOINT
-          value: "http://minio.default.svc.cluster.local:9000"
+          value: "http://192.168.72.27:9000"
         # リージョン (デフォルト: us-east-1)
         - name: S3FS_REGION
           value: "us-east-1"

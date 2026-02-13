@@ -20,18 +20,39 @@ meta-fuse-csi-pluginを使用して、S3互換ストレージ（MinIO、Ceph、A
 1. Kubernetes v1.29+ (SidecarContainers 機能が必要)
 2. meta-fuse-csi-plugin の CSI DaemonSet がデプロイ済み
    ```bash
-   kubectl apply -f ../deploy/csi-driver.yaml
-   kubectl apply -f ../deploy/csi-driver-daemonset.yaml
+   kubectl apply -f ../csi/csi-driver.yaml
+   kubectl apply -f ../csi/csi-driver-daemonset.yaml
    ```
 
 ## セットアップ手順
 
-### 1. Docker イメージのビルド
+### 1. s3fs サイドカーイメージのビルド & プッシュ
+
+Dockerfile はマルチステージビルドで、Stage 1 で `fusermount3-proxy` を Go でビルドし、
+Stage 2 で Ubuntu 22.04 ベースの s3fs イメージに組み込みます。
 
 ```bash
-cd s3fs
+# Dockerfile 内の git clone が meta-fuse-csi-plugin リポジトリを自動取得するため、
+# ソースの事前配置は不要
+
+cd s3fs/
 docker build -t s3fs-proxy:latest .
 ```
+
+**レジストリにプッシュする場合:**
+
+```bash
+docker tag s3fs-proxy:latest your-registry/s3fs-proxy:latest
+docker push your-registry/s3fs-proxy:latest
+```
+
+**kind を使う場合:**
+
+```bash
+kind load docker-image s3fs-proxy:latest
+```
+
+> kind の場合、deploy.yaml の `imagePullPolicy` が `Never` または `IfNotPresent` であることを確認してください。
 
 ### 2. S3認証情報Secretの作成
 
