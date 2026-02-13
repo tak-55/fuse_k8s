@@ -131,14 +131,55 @@ docker build -t s3fs-proxy:latest .
 
 ### kind での開発
 
-kindクラスターで開発する場合：
+#### kind クラスターの作成
+
+ローカル開発環境用のKubernetesクラスターを作成します。
+
+```bash
+# kind のインストール (未インストールの場合)
+# Linux
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+chmod +x ./kind
+sudo mv ./kind /usr/local/bin/kind
+
+# macOS
+brew install kind
+
+# kind クラスターの作成
+kind create cluster --name fuse-dev
+
+# kubectl のコンテキスト確認
+kubectl cluster-info --context kind-fuse-dev
+```
+
+#### イメージのロード
+
+ビルドしたイメージをkindクラスターにロードします。
 
 ```bash
 # イメージをkindにロード
-kind load docker-image sshfs-proxy:latest
-kind load docker-image s3fs-proxy:latest
+kind load docker-image sshfs-proxy:latest --name fuse-dev
+kind load docker-image s3fs-proxy:latest --name fuse-dev
 
-# deploy.yaml の imagePullPolicy を Never に設定
+# ロードされたイメージの確認
+docker exec -it fuse-dev-control-plane crictl images | grep proxy
+```
+
+> **注意**: deploy.yaml の `imagePullPolicy` を `Never` または `IfNotPresent` に設定してください。
+
+#### kind クラスターの削除
+
+開発が終了したらクラスターを削除できます。
+
+```bash
+# クラスターの削除
+kind delete cluster --name fuse-dev
+
+# すべてのkindクラスターを削除
+kind delete clusters --all
+
+# クラスター一覧の確認
+kind get clusters
 ```
 
 ## トラブルシューティング
