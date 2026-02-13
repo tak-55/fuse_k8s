@@ -1,6 +1,6 @@
-# Kubernetes FUSE マウント - meta-fuse-csi-plugin 実装集
+# Kubernetes FUSE マウント - meta-fuse-csi-plugin 実装例
 
-[meta-fuse-csi-plugin](https://github.com/pfnet-research/meta-fuse-csi-plugin) を使用して、Kubernetes Pod 内で各種ファイルシステムをFUSEマウントするためのサイドカーコンテナ実装集です。
+[meta-fuse-csi-plugin](https://github.com/pfnet-research/meta-fuse-csi-plugin) を使用して、Kubernetes Pod 内で各種ファイルシステムをFUSEマウントするためのサイドカーコンテナ実装例です。
 
 ## 概要
 
