@@ -1,0 +1,186 @@
+# ============================================================================
+# .gitignore for Kubernetes FUSE mount project
+# ============================================================================
+
+# -----------------------------------------------------------------------------
+# Kubernetes Secrets & Sensitive Files
+# -----------------------------------------------------------------------------
+# SSH keys
+*.pem
+*.key
+*_key
+id_rsa*
+id_ed25519*
+known_hosts
+
+# Kubernetes secrets (if generated locally)
+*-secret.yaml
+secret-*.yaml
+credentials.yaml
+
+# AWS / S3 credentials
+.aws/
+*.credentials
+
+# Password files
+passwd-s3fs
+.passwd-s3fs
+
+# -----------------------------------------------------------------------------
+# IDE & Editor
+# -----------------------------------------------------------------------------
+# VSCode
+.vscode/
+*.code-workspace
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim
+*.swp
+*.swo
+*~
+.*.sw?
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# -----------------------------------------------------------------------------
+# OS Files
+# -----------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# -----------------------------------------------------------------------------
+# Docker & Container
+# -----------------------------------------------------------------------------
+# Docker build context
+.dockerignore
+
+# Container runtime
+.container-*
+
+# -----------------------------------------------------------------------------
+# Build Artifacts
+# -----------------------------------------------------------------------------
+# Binaries
+bin/
+dist/
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+vendor/
+*.test
+*.out
+
+# Compiled files
+*.o
+*.a
+*.lib
+
+# -----------------------------------------------------------------------------
+# Logs & Temporary Files
+# -----------------------------------------------------------------------------
+*.log
+*.tmp
+*.temp
+*.cache
+.cache/
+
+# Test output
+test-results/
+coverage/
+*.cover
+
+# -----------------------------------------------------------------------------
+# Backup Files
+# -----------------------------------------------------------------------------
+*.bak
+*.backup
+*.orig
+*.rej
+
+# -----------------------------------------------------------------------------
+# Kind & Local Development
+# -----------------------------------------------------------------------------
+# Kind cluster config (if customized locally)
+kind-config-local.yaml
+
+# Local overrides
+*-local.yaml
+*.local.yaml
+local/
+
+# -----------------------------------------------------------------------------
+# CI/CD & Deployment
+# -----------------------------------------------------------------------------
+# Helm charts (if added later)
+charts/*/charts/
+*.tgz
+
+# Kustomize overlays (if using local overlays)
+overlays/local/
+
+# -----------------------------------------------------------------------------
+# Claude Code & AI Tools
+# -----------------------------------------------------------------------------
+# Claude Code project files are already in ~/.claude/
+# (No exclusions needed here)
+
+# -----------------------------------------------------------------------------
+# Dependencies & Packages
+# -----------------------------------------------------------------------------
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+ENV/
+env/
+
+# -----------------------------------------------------------------------------
+# Personal Notes & TODO
+# -----------------------------------------------------------------------------
+TODO.md
+NOTES.md
+notes/
+docs/personal/
+
+# -----------------------------------------------------------------------------
+# Generated Files
+# -----------------------------------------------------------------------------
+# Auto-generated from templates
+*-generated.yaml
+generated/
