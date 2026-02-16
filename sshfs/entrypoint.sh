@@ -72,6 +72,7 @@ echo "[INFO] sshfs を起動します: ${SSHFS_USER}@${SSHFS_HOST}:${SSHFS_REMOT
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
     -o IdentityFile=/secrets/ssh/private_key \
+    -o GSSAPIAuthentication=no \
     -f \
     &
 
