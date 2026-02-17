@@ -1,0 +1,146 @@
+<mxfile host="app.diagrams.net" modified="2026-02-18T00:00:00.000Z" agent="5.0" etag="architecture-v2" version="24.4.0" type="device">
+  <diagram id="C5RBs43oDa-KdzZeNtuy" name="Page-1">
+    <mxGraphModel dx="1422" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ================================================================ -->
+        <!-- Kubernetes Node -->
+        <!-- ================================================================ -->
+        <mxCell id="node" value="Kubernetes Node" style="rounded=1;whiteSpace=wrap;html=1;container=1;collapsible=0;recursiveResize=0;verticalAlign=top;align=left;spacingTop=6;spacingLeft=8;fontStyle=1;fontSize=14;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;dashPattern=8 4;" vertex="1" parent="1">
+          <mxGeometry x="40" y="30" width="1020" height="780" as="geometry" />
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- User Pod -->
+        <!-- ================================================================ -->
+        <mxCell id="pod" value="User Pod" style="rounded=1;whiteSpace=wrap;html=1;container=1;collapsible=0;recursiveResize=0;verticalAlign=top;align=left;spacingTop=6;spacingLeft=8;fontStyle=1;fontSize=13;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="node">
+          <mxGeometry x="40" y="50" width="940" height="400" as="geometry" />
+        </mxCell>
+
+        <!-- FUSE Sidecar Container -->
+        <mxCell id="sidecar" value="&lt;b&gt;FUSE Sidecar&lt;/b&gt;&lt;br&gt;(restartable init container)&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#CC0000&quot;&gt;privileged: true&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;spacingTop=8;fillColor=#fff2cc;strokeColor=#d6b656;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="pod">
+          <mxGeometry x="40" y="50" width="280" height="240" as="geometry" />
+        </mxCell>
+
+        <!-- sshfs / s3fs process -->
+        <mxCell id="fuse_proc" value="sshfs / s3fs&lt;br&gt;(FUSE client -f)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="sidecar">
+          <mxGeometry x="20" y="80" width="240" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- touch /dev/fuse -->
+        <mxCell id="touch_fuse" value="touch /dev/fuse&lt;br&gt;&lt;font style=&quot;font-size:9px&quot; color=&quot;#888&quot;&gt;libfuse &amp;rarr; fusermount3 fallback&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="sidecar">
+          <mxGeometry x="20" y="135" width="240" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- fusermount3-proxy -->
+        <mxCell id="fm3proxy" value="&lt;b&gt;fusermount3-proxy&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot; color=&quot;#888&quot;&gt;(/bin/fusermount3 に差し替え)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="sidecar">
+          <mxGeometry x="20" y="190" width="240" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- App Container -->
+        <mxCell id="app" value="&lt;b&gt;App Container&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#007700&quot;&gt;no privileges required&lt;/font&gt;&lt;br&gt;&lt;br&gt;/data &amp;rarr; FUSE mount" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="pod">
+          <mxGeometry x="620" y="50" width="280" height="240" as="geometry" />
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- Volumes (inside User Pod) -->
+        <!-- ================================================================ -->
+
+        <!-- CSI Ephemeral Volume -->
+        <mxCell id="csi_vol" value="&lt;b&gt;CSI Ephemeral Volume&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;driver: meta-fuse-csi-plugin&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="pod">
+          <mxGeometry x="390" y="55" width="180" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Bidirectional label: sidecar -> csi_vol -->
+        <mxCell id="e_sc_vol" value="Bidirectional" style="endArrow=classic;startArrow=classic;html=1;rounded=0;fontSize=10;fontColor=#9673a6;" edge="1" parent="pod" source="sidecar" target="csi_vol">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- HostToContainer label: csi_vol -> app -->
+        <mxCell id="e_vol_app" value="HostToContainer" style="endArrow=classic;html=1;rounded=0;fontSize=10;fontColor=#9673a6;" edge="1" parent="pod" source="csi_vol" target="app">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- emptyDir for UDS socket -->
+        <mxCell id="emptydir" value="&lt;b&gt;emptyDir&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;fuse-socket-dir&lt;br&gt;/var/lib/mfcp/uds/&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="pod">
+          <mxGeometry x="390" y="190" width="180" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- sidecar -> emptyDir -->
+        <mxCell id="e_sc_empty" value="" style="endArrow=classic;startArrow=classic;html=1;rounded=0;fontSize=10;" edge="1" parent="pod" source="sidecar" target="emptydir">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Mount Propagation note -->
+        <mxCell id="note_mount" value="&lt;font style=&quot;font-size:10px&quot; color=&quot;#666&quot;&gt;mountPropagation により&lt;br&gt;sidecar のマウントが app に伝播&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;" vertex="1" parent="pod">
+          <mxGeometry x="380" y="130" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Secret note -->
+        <mxCell id="secret_note" value="&lt;font style=&quot;font-size:10px&quot; color=&quot;#666&quot;&gt;Secrets:&lt;br&gt;sshfs &amp;rarr; ssh-key (秘密鍵)&lt;br&gt;s3fs &amp;rarr; s3-credentials (AK/SK)&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;" vertex="1" parent="pod">
+          <mxGeometry x="40" y="310" width="200" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- CSI DaemonSet Pod -->
+        <!-- ================================================================ -->
+        <mxCell id="csi_pod" value="CSI DaemonSet Pod (per Node)" style="rounded=1;whiteSpace=wrap;html=1;container=1;collapsible=0;recursiveResize=0;verticalAlign=top;align=left;spacingTop=6;spacingLeft=8;fontStyle=1;fontSize=13;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="node">
+          <mxGeometry x="40" y="520" width="940" height="220" as="geometry" />
+        </mxCell>
+
+        <!-- csi-driver container -->
+        <mxCell id="csi_driver" value="&lt;b&gt;csi-driver&lt;/b&gt;&lt;br&gt;meta-fuse-csi-plugin&lt;br&gt;&lt;br&gt;&lt;font color=&quot;#CC0000&quot;&gt;privileged: true&lt;br&gt;(CAP_SYS_ADMIN)&lt;/font&gt;&lt;br&gt;&lt;br&gt;open(&amp;quot;/dev/fuse&amp;quot;) + mount()" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fillColor=#fff;strokeColor=#b85450;fontSize=11;" vertex="1" parent="csi_pod">
+          <mxGeometry x="40" y="50" width="280" height="140" as="geometry" />
+        </mxCell>
+
+        <!-- node-driver-registrar container -->
+        <mxCell id="registrar" value="&lt;b&gt;node-driver-registrar&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;CSI ソケットを&lt;br&gt;kubelet に登録&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fillColor=#fff;strokeColor=#b85450;fontSize=11;" vertex="1" parent="csi_pod">
+          <mxGeometry x="380" y="50" width="200" height="140" as="geometry" />
+        </mxCell>
+
+        <!-- hostPath volumes -->
+        <mxCell id="hostpath_note" value="&lt;font style=&quot;font-size:10px&quot; color=&quot;#666&quot;&gt;hostPath volumes:&lt;br&gt;/var/lib/kubelet (Bidirectional)&lt;br&gt;/dev/fuse&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=1;" vertex="1" parent="csi_pod">
+          <mxGeometry x="640" y="60" width="220" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- UDS Arrow: sidecar (emptyDir) -> CSI DaemonSet -->
+        <!-- ================================================================ -->
+        <mxCell id="uds_arrow" value="&lt;b&gt;UDS (Unix Domain Socket)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;mfcp.sock&lt;br&gt;fd passing&lt;/font&gt;" style="endArrow=classic;startArrow=classic;html=1;rounded=0;fontSize=11;strokeWidth=2;strokeColor=#b85450;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.3;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="node" source="emptydir" target="csi_pod">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ================================================================ -->
+        <!-- Flow number labels -->
+        <!-- ================================================================ -->
+        <mxCell id="step1" value="&#10102;" style="text;html=1;fontSize=16;fontStyle=1;fillColor=none;fontColor=#d6b656;" vertex="1" parent="node">
+          <mxGeometry x="85" y="185" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="step2" value="&#10103;" style="text;html=1;fontSize=16;fontStyle=1;fillColor=none;fontColor=#d6b656;" vertex="1" parent="node">
+          <mxGeometry x="85" y="240" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="step3" value="&#10104;" style="text;html=1;fontSize=16;fontStyle=1;fillColor=none;fontColor=#d6b656;" vertex="1" parent="node">
+          <mxGeometry x="85" y="295" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="step4" value="&#10105;" style="text;html=1;fontSize=16;fontStyle=1;fillColor=none;fontColor=#b85450;" vertex="1" parent="node">
+          <mxGeometry x="85" y="620" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="step5" value="&#10106;" style="text;html=1;fontSize=16;fontStyle=1;fillColor=none;fontColor=#82b366;" vertex="1" parent="node">
+          <mxGeometry x="660" y="100" width="30" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend" value="&lt;b&gt;動作フロー&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;&#10102; sshfs/s3fs をフォアグラウンド起動&lt;br&gt;&#10103; touch /dev/fuse で fusermount3 経由パスに誘導&lt;br&gt;&#10104; fusermount3-proxy が UDS で CSI DaemonSet と通信&lt;br&gt;&#10105; CSI DaemonSet が open(&amp;quot;/dev/fuse&amp;quot;) + mount() を実行&lt;br&gt;&#10106; App container が /data 経由でマウント済み FS にアクセス&lt;/font&gt;" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;fillColor=#fff;strokeColor=#ccc;rounded=1;spacingLeft=6;spacingRight=6;spacingTop=4;spacingBottom=4;" vertex="1" parent="node">
+          <mxGeometry x="640" y="590" width="340" height="120" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
