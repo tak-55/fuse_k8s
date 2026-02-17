@@ -16,16 +16,58 @@ fusermount3-proxyを使用することで、アプリケーションコンテナ
 
 ## アーキテクチャ
 
-[Architecture Diagram](docs/architecture.drawio)
+```mermaid
+graph TB
+    subgraph Node["<b>Kubernetes Node</b>"]
+        subgraph Pod["<b>User Pod</b>"]
+            subgraph Sidecar["<b>FUSE Sidecar</b><br/>(restartable init container)<br/>privileged: true"]
+                S1["① sshfs / s3fs<br/>(FUSE client -f)"]
+                S2["② touch /dev/fuse<br/><i>libfuse → fusermount3 fallback</i>"]
+                S3["③ <b>fusermount3-proxy</b><br/><i>/bin/fusermount3 に差し替え</i>"]
+            end
 
+            CSIVol[("CSI Ephemeral Volume<br/>driver: meta-fuse-csi-plugin")]
+            EmptyDir[("emptyDir<br/>fuse-socket-dir<br/>/var/lib/mfcp/uds/")]
+
+            subgraph App["<b>App Container</b><br/>no privileges required"]
+                A1["⑤ /data → FUSE mount"]
+            end
+
+            Sidecar -- "Bidirectional" --> CSIVol
+            CSIVol -- "HostToContainer" --> App
+            Sidecar --- EmptyDir
+        end
+
+        subgraph CSIPod["<b>CSI DaemonSet Pod</b> (per Node)"]
+            D1["④ <b>csi-driver</b><br/>meta-fuse-csi-plugin<br/>privileged: true (CAP_SYS_ADMIN)<br/>open('/dev/fuse') + mount()"]
+            D2["<b>node-driver-registrar</b><br/>CSI ソケットを kubelet に登録"]
+            HP["<i>hostPath volumes:<br/>/var/lib/kubelet (Bidirectional)<br/>/dev/fuse</i>"]
+        end
+
+        EmptyDir -. "<b>UDS (Unix Domain Socket)</b><br/>mfcp.sock / fd passing" .-> D1
+    end
+
+    style Node fill:#f5f5f5,stroke:#666,stroke-dasharray: 8 4
+    style Pod fill:#dae8fc,stroke:#6c8ebf
+    style Sidecar fill:#fff2cc,stroke:#d6b656
+    style App fill:#d5e8d4,stroke:#82b366
+    style CSIPod fill:#f8cecc,stroke:#b85450
+    style CSIVol fill:#e1d5e7,stroke:#9673a6
+    style EmptyDir fill:#e1d5e7,stroke:#9673a6
+    style D1 fill:#fff,stroke:#b85450
+    style D2 fill:#fff,stroke:#b85450
+    style HP fill:#f8cecc,stroke:#f8cecc
+```
+
+> 詳細な drawio 版: [docs/architecture.drawio](docs/architecture.drawio)
 
 ### 動作原理
 
-1. **Sidecarコンテナ**がFUSEファイルシステム（sshfs、s3fs等）を起動
-2. `touch /dev/fuse`により、libfuseがfusermount3経由パスを使用
-3. **fusermount3-proxy**がfusermount3として動作し、UDSでCSI DaemonSetと通信
-4. **CSI DaemonSet**が`CAP_SYS_ADMIN`権限でマウント操作を実行
-5. **アプリケーションコンテナ**が権限なしでマウントされたファイルシステムにアクセス
+1. **Sidecarコンテナ**がFUSEファイルシステム（sshfs、s3fs等）をフォアグラウンドで起動
+2. `touch /dev/fuse`により通常ファイルを作成し、libfuseをfusermount3経由パスにフォールバックさせる
+3. **fusermount3-proxy**がfusermount3として動作し、UDS（mfcp.sock）でCSI DaemonSetとfd passingで通信
+4. **CSI DaemonSet**が`CAP_SYS_ADMIN`権限で`open("/dev/fuse")` + `mount()`を実行
+5. **アプリケーションコンテナ**がmountPropagation（HostToContainer）により権限なしでマウント済みファイルシステムにアクセス
 
 ## ディレクトリ構成
 
