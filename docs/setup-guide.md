@@ -15,8 +15,7 @@
 | Kubernetes | **v1.29+**（SidecarContainers 機能が必須） |
 | OS | Linux ノード (`kubernetes.io/os=linux`) |
 | ノード権限 | CSI Driver Pod 用の `CAP_SYS_ADMIN` をクラスター管理者が許可 |
-| ビルドツール | Docker または Podman（サイドカーイメージのビルド用） |
-| ローカル検証 | kind (Kubernetes in Docker) で動作確認可能 |
+| ローカル検証 | kind (Kubernetes in Docker) + Docker で動作確認可能 |
 
 ### サポートする FUSE 実装
 
@@ -80,26 +79,21 @@ NAME                   DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE
 meta-fuse-csi-plugin   1         1         1       1            1           kubernetes.io/os=linux   1m
 ```
 
-### ステップ 4: サイドカーイメージのビルド
+### ステップ 4: サイドカーイメージの準備
 
-使用する FUSE 実装のイメージをビルドします。
+**kind 環境の場合:**
 
 ```bash
-# sshfs
 docker build -t sshfs-proxy:latest ./sshfs/
-
-# s3fs
 docker build -t s3fs-proxy:latest ./s3fs/
-```
-
-kind 環境の場合はイメージをロードします。
-
-```bash
 kind load docker-image sshfs-proxy:latest --name fuse-dev
 kind load docker-image s3fs-proxy:latest --name fuse-dev
 ```
 
-> **注意**: kind 環境では `deploy-kind.yaml`（`imagePullPolicy: Never`）を使用してください。
+**レジストリ利用の場合:**
+
+GitHub Actions により main ブランチへの push 時に ghcr.io へ自動ビルド・プッシュされます。
+各 `deploy-registry.yaml` の `image` を自環境のレジストリに書き換えてください。
 
 ---
 

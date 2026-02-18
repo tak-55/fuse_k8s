@@ -73,7 +73,6 @@ fuse_k8s/
 
 - Kubernetes v1.29+ (SidecarContainers 機能が必要)
 - kubectl がクラスターに接続済み
-- Docker または Podman (イメージビルド用)
 
 ### 2. CSI ドライバーのデプロイ
 
@@ -118,25 +117,9 @@ cd s3fs/
 
 ## 開発・テスト
 
-### イメージのビルド
-
-各ディレクトリでDockerイメージをビルドできます。
-
-```bash
-# sshfs
-cd sshfs/
-docker build -t sshfs-proxy:latest .
-
-# s3fs
-cd s3fs/
-docker build -t s3fs-proxy:latest .
-```
-
 ### kind での開発
 
 #### kind クラスターの作成
-
-ローカル開発環境用のKubernetesクラスターを作成します。
 
 ```bash
 # kind のインストール (未インストールの場合)
@@ -155,12 +138,14 @@ kind create cluster --name fuse-dev
 kubectl cluster-info --context kind-fuse-dev
 ```
 
-#### イメージのロード
-
-ビルドしたイメージをkindクラスターにロードします。
+#### イメージのビルドとロード
 
 ```bash
-# イメージをkindにロード
+# ビルド
+docker build -t sshfs-proxy:latest ./sshfs/
+docker build -t s3fs-proxy:latest ./s3fs/
+
+# kind にロード
 kind load docker-image sshfs-proxy:latest --name fuse-dev
 kind load docker-image s3fs-proxy:latest --name fuse-dev
 
@@ -168,7 +153,13 @@ kind load docker-image s3fs-proxy:latest --name fuse-dev
 docker exec -it fuse-dev-control-plane crictl images | grep proxy
 ```
 
-> **注意**: deploy.yaml の `imagePullPolicy` を `Never` または `IfNotPresent` に設定してください。
+#### デプロイ
+
+```bash
+# kind 向けマニフェストを使用
+kubectl apply -f sshfs/deploy-kind.yaml
+kubectl apply -f s3fs/deploy-kind.yaml
+```
 
 #### kind クラスターの削除
 

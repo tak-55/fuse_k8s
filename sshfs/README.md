@@ -26,33 +26,20 @@ meta-fuse-csi-pluginを使用して、SSHリモートファイルシステムを
 
 ## セットアップ手順
 
-### 1. sshfs サイドカーイメージのビルド & プッシュ
+### 1. サイドカーイメージの準備
 
-Dockerfile はマルチステージビルドで、Stage 1 で `fusermount3-proxy` を Go でビルドし、
-Stage 2 で Ubuntu 22.04 ベースの sshfs イメージに組み込みます。
+**kind 環境の場合:**
 
 ```bash
-# Dockerfile 内の git clone が meta-fuse-csi-plugin リポジトリを自動取得するため、
-# ソースの事前配置は不要
-
 cd sshfs/
 docker build -t sshfs-proxy:latest .
+kind load docker-image sshfs-proxy:latest --name fuse-dev
 ```
 
-**レジストリにプッシュする場合:**
+**レジストリ利用の場合:**
 
-```bash
-docker tag sshfs-proxy:latest your-registry/sshfs-proxy:latest
-docker push your-registry/sshfs-proxy:latest
-```
-
-**kind を使う場合:**
-
-```bash
-kind load docker-image sshfs-proxy:latest
-```
-
-> kind の場合、deploy.yaml の `imagePullPolicy` が `Never` または `IfNotPresent` であることを確認してください。
+GitHub Actions により main ブランチへの push 時に自動ビルド・プッシュされます。
+`deploy-registry.yaml` の `image` を自環境のレジストリに書き換えてください。
 
 ### 2. SSH鍵の準備
 
