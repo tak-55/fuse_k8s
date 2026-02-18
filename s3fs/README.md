@@ -75,7 +75,12 @@ kubectl create secret generic s3-credentials \
 ### 4. デプロイ
 
 ```bash
-kubectl apply -f deploy.yaml
+# kind 環境の場合
+kubectl apply -f deploy-kind.yaml
+
+# レジストリからイメージをプルする場合
+# deploy-registry.yaml の image を自環境のレジストリに書き換えてください
+kubectl apply -f deploy-registry.yaml
 ```
 
 ### 5. 動作確認

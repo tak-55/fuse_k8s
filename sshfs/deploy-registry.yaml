@@ -1,0 +1,158 @@
+# =============================================================================
+# meta-fuse-csi-plugin + sshfs: 汎用デプロイマニフェスト
+#
+# 使い方:
+#   1. Pod spec 内の env で SSH接続パラメータを編集
+#   2. (外部SSHサーバー使用時) ssh-key Secret に秘密鍵を登録
+#   3. kubectl apply -f deploy.yaml
+#
+# アーキテクチャ:
+#   [sshfs sidecar]
+#     └─ touch /dev/fuse            (libfuse に fusermount3 経由を強制)
+#     └─ sshfs ... -f               (フォアグラウンド起動)
+#     └─ fusermount3-proxy          (fusermount3 として差し替え済み)
+#          └─ UDS ─────────────────> [CSI DaemonSet (CAP_SYS_ADMIN)]
+#                                        └─ open("/dev/fuse") + mount()
+#   [app container]
+#     └─ /data (HostToContainer 伝播)
+# =============================================================================
+
+# -----------------------------------------------------------------------
+# Pod: sshfs マウント + アプリケーション (Kubernetes v1.29+ サイドカー対応)
+# -----------------------------------------------------------------------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sshfs-example
+  namespace: default
+  labels:
+    app.kubernetes.io/name: sshfs-proxy
+    app.kubernetes.io/component: example
+spec:
+  # -----------------------------------------------------------------------
+  # sshfs コンテナを restartable init container (sidecar) として定義。
+  # startupProbe が成功するまでアプリコンテナは起動しない。
+  # (Kubernetes v1.29+ の SidecarContainers 機能を使用)
+  # -----------------------------------------------------------------------
+  initContainers:
+    - name: sshfs-proxy
+      # docker build -t your-registry/sshfs-proxy:latest ./sshfs/ でビルドしたイメージを指定
+      image: your-registry/sshfs-proxy:latest
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        privileged: true
+      restartPolicy: Always   # サイドカーとして動作 (v1.29+)
+      env:
+        - name: SSHFS_HOST
+          value: "192.168.72.27"
+        - name: SSHFS_USER
+          value: "demouser"
+        - name: SSHFS_REMOTE_PATH
+          value: "/home/demouser"
+        - name: SSHFS_PORT
+          value: "22"
+        - name: USE_LOCAL_SSHD
+          value: "false"
+        # 秘密鍵のみSecretから環境変数に注入
+        - name: SSH_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ssh-key
+              key: private_key
+        # sshfs マウントポイント = CSIボリュームのコンテナ内マウントパスと一致させること
+        - name: SSHFS_MOUNT_POINT
+          value: /mnt/sshfs
+        # -----------------------------------------------------------------------
+        # FUSERMOUNT3PROXY_FDPASSING_SOCKPATH:
+        #   fusermount3-proxy が CSI DaemonSet と通信する UDS ソケットのフルパス。
+        #   volumes[].csi.volumeAttributes.socketDir + "/" + socketName と一致させる。
+        # -----------------------------------------------------------------------
+        - name: FUSERMOUNT3PROXY_FDPASSING_SOCKPATH
+          value: /var/lib/mfcp/uds/mfcp.sock
+      volumeMounts:
+        # CSI DaemonSet との UDS 通信用ソケットディレクトリ (emptyDir)
+        - name: fuse-socket-dir
+          mountPath: /var/lib/mfcp/uds
+        # sshfs マウントポイント
+        # Bidirectional: ホスト側にマウントを伝播させるために必須
+        - name: sshfs-volume
+          mountPath: /mnt/sshfs
+          mountPropagation: Bidirectional
+          # SSH秘密鍵をSecretからマウント
+        - name: ssh-key
+          mountPath: /secrets/ssh/
+          readOnly: true
+      # マウント完了プローブ: アプリコンテナはこれが成功するまで起動しない
+      startupProbe:
+        exec:
+          command:
+            - sh
+            - -c
+            - "mount | grep fuse.sshfs"
+        initialDelaySeconds: 5
+        periodSeconds: 3
+        failureThreshold: 30
+        successThreshold: 1
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+  containers:
+    # -----------------------------------------------------------------------
+    # アプリケーションコンテナ
+    # sshfs-proxy の startupProbe が成功してから起動するため、
+    # /data には確実に sshfs がマウントされている。
+    # -----------------------------------------------------------------------
+    - name: app
+      image: busybox:stable
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          echo "=== sshfs マウント確認 ==="
+          mount | grep fuse
+          echo "=== /data の内容 ==="
+          ls -la /data
+          sleep infinity
+      volumeMounts:
+        # sshfs でマウントされたディレクトリを /data として利用
+        # HostToContainer: ホスト側のマウントをコンテナに伝播
+        - name: sshfs-volume
+          mountPath: /data
+          mountPropagation: HostToContainer
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+
+  volumes:
+    # CSI DaemonSet との UDS 通信用 emptyDir
+    - name: fuse-socket-dir
+      emptyDir: {}
+
+    # meta-fuse-csi-plugin が管理する CSI エフェメラルボリューム
+    - name: sshfs-volume
+      csi:
+        driver: meta-fuse-csi-plugin.csi.storage.pfn.io
+        volumeAttributes:
+          # UDS ソケットのディレクトリパス (fuse-socket-dir マウントポイントと一致)
+          socketDir: /var/lib/mfcp/uds
+          # UDS ソケットファイル名
+          socketName: mfcp.sock
+          fdPassingEmptyDirName: fuse-socket-dir
+          fdPassingSocketName: mfcp.sock
+
+    # SSH秘密鍵を格納するSecret
+    - name: ssh-key
+      secret:
+        secretName: ssh-key
+        defaultMode: 0400
+
+  # sshfs コンテナが正常にアンマウントするための猶予時間
+  terminationGracePeriodSeconds: 30

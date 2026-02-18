@@ -56,12 +56,14 @@ fuse_k8s/
 ├── sshfs/                         # SSH リモートファイルシステム
 │   ├── Dockerfile                 # sshfs サイドカーイメージ
 │   ├── entrypoint.sh              # sshfs 起動スクリプト
-│   ├── deploy.yaml                # デプロイ用 Pod マニフェスト
+│   ├── deploy-kind.yaml           # kind 向けデプロイマニフェスト
+│   ├── deploy-registry.yaml       # レジストリ向けデプロイマニフェスト
 │   └── README.md                  # sshfs 詳細ドキュメント
 └── s3fs/                          # S3 互換ストレージ
     ├── Dockerfile                 # s3fs サイドカーイメージ
     ├── entrypoint.sh              # s3fs 起動スクリプト
-    ├── deploy.yaml                # デプロイ用 Pod マニフェスト
+    ├── deploy-kind.yaml           # kind 向けデプロイマニフェスト
+    ├── deploy-registry.yaml       # レジストリ向けデプロイマニフェスト
     └── README.md                  # s3fs 詳細ドキュメント
 ```
 
