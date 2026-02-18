@@ -23,24 +23,29 @@ FUSE（Filesystem in UserSpace）は Linux カーネルの機能で、ユーザ�
 
 ### アーキテクチャ
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  Kubernetes Node                                         │
-│                                                          │
-│  ┌──────────────────────┐   ┌─────────────────────────┐ │
-│  │  CSI Driver Pod      │   │  User Pod               │ │
-│  │  (DaemonSet)         │   │                         │ │
-│  │  ・CAP_SYS_ADMIN あり│   │  ・CAP_SYS_ADMIN なし   │ │
-│  │  ・/dev/fuse open(2) │◄──│  ・FUSE 実装を自由に選択│ │
-│  │  ・mount(2) 実行     │UDS│  ・sidecar コンテナ      │ │
-│  │  ・fd を UDS 経由で渡す│──►│    (fuse-starter or     │ │
-│  └──────────────────────┘   │     fusermount3-proxy)  │ │
-│                              └─────────────────────────┘ │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    subgraph Node["Kubernetes Node"]
+        subgraph CSIPod["CSI Driver Pod (DaemonSet)"]
+            CSI["CAP_SYS_ADMIN あり<br/>/dev/fuse open(2)<br/>mount(2) 実行<br/>fd を UDS 経由で渡す"]
+        end
+        subgraph UserPod["User Pod"]
+            Sidecar["Sidecar<br/>(fuse-starter or<br/>fusermount3-proxy)"]
+            App["App Container"]
+            Sidecar -- "mountPropagation" --> App
+        end
+        Sidecar -. "UDS<br/>(fd passing)" .-> CSI
+    end
+
+    style CSIPod fill:#f8cecc,stroke:#b85450
+    style UserPod fill:#dae8fc,stroke:#6c8ebf
+    style CSI fill:#fff,stroke:#b85450
+    style Sidecar fill:#fff2cc,stroke:#d6b656
+    style App fill:#d5e8d4,stroke:#82b366
 ```
 
-- **CSI Driver Pod**: クラスター管理者が DaemonSet として各ノードにデプロイ。特権操作（`/dev/fuse` の open・mount）を代行
-- **User Pod**: ユーザーが任意の FUSE 実装を `CAP_SYS_ADMIN` なしで使用
+- **CSI Driver Pod**: クラスター管理者が DaemonSet として各ノードにデプロイ。特権操作（`/dev/fuse` の open・mount）を代行。`CAP_SYS_ADMIN` はこの Pod のみが保持
+- **User Pod**: ユーザーが任意の FUSE 実装を `CAP_SYS_ADMIN` なしで使用。Sidecar コンテナが UDS 経由で CSI Driver Pod と通信
 
 ---
 
@@ -340,22 +345,15 @@ This is a test file for minio
 
 ## 6. セキュリティモデル
 
-```
-特権操作の分離:
-┌─────────────────────────────────────┐
-│  CSI Driver Pod（クラスター管理者管理） │
-│  ・CAP_SYS_ADMIN あり               │
-│  ・/dev/fuse の open(2)             │
-│  ・mount(2) の実行                  │
-│  ・fd を UDS 経由でのみ渡す          │
-└─────────────────────────────────────┘
-              ↕ UDS (SCM_RIGHTS)
-┌─────────────────────────────────────┐
-│  User Pod（一般ユーザー管理）         │
-│  ・CAP_SYS_ADMIN なし               │
-│  ・fd 受け取り後は通常権限で FUSE 処理│
-│  ・任意の FUSE 実装を自由に選択      │
-└─────────────────────────────────────┘
+```mermaid
+graph TB
+    CSI["<b>CSI Driver Pod</b><br/>（クラスター管理者管理）<br/><br/>CAP_SYS_ADMIN あり<br/>/dev/fuse の open(2)<br/>mount(2) の実行<br/>fd を UDS 経由でのみ渡す"]
+    User["<b>User Pod</b><br/>（一般ユーザー管理）<br/><br/>CAP_SYS_ADMIN なし<br/>fd 受け取り後は通常権限で FUSE 処理<br/>任意の FUSE 実装を自由に選択"]
+
+    CSI <-. "UDS (SCM_RIGHTS)<br/>fd passing" .-> User
+
+    style CSI fill:#f8cecc,stroke:#b85450
+    style User fill:#dae8fc,stroke:#6c8ebf
 ```
 
 `SCM_RIGHTS` メッセージを利用した UDS 経由の fd 受け渡しにより、特権操作はクラスター管理者管理の Pod に限定されます。
