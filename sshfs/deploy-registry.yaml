@@ -36,7 +36,7 @@ spec:
   # -----------------------------------------------------------------------
   initContainers:
     - name: sshfs-proxy
-      # docker build -t your-registry/sshfs-proxy:latest ./sshfs/ でビルドしたイメージを指定
+      # 自環境のレジストリに書き換えてください
       image: your-registry/sshfs-proxy:latest
       imagePullPolicy: IfNotPresent
       securityContext:

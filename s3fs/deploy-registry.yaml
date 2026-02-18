@@ -39,7 +39,7 @@ spec:
   # -----------------------------------------------------------------------
   initContainers:
     - name: s3fs-proxy
-      # docker build -t your-registry/s3fs-proxy:latest ./s3fs/ でビルドしたイメージを指定
+      # 自環境のレジストリに書き換えてください
       image: your-registry/s3fs-proxy:latest
       imagePullPolicy: IfNotPresent
       securityContext:
