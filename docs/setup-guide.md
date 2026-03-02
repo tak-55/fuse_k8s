@@ -41,7 +41,7 @@ kubectl cluster-info --context kind-fuse-dev
 ### ステップ 1: リポジトリのクローン
 
 ```bash
-git clone https://github.com/<your-org>/fuse_k8s.git
+git clone https://github.com/tak-lab55/fuse_k8s.git
 cd fuse_k8s
 ```
 

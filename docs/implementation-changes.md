@@ -24,7 +24,7 @@
 | **定義場所** | `containers`（通常コンテナ） | `initContainers` + `restartPolicy: Always` |
 | **起動順序制御** | `while` ループでマウント待機、または `startupProbe` | `startupProbe` で保証（成功するまで app コンテナは起動しない） |
 
-**変更理由**: Native sidecar により、FUSE マウント完了を保証してからアプリケーションコンテナを起動する信頼性の高い順序制御が可能になった。調査レポートで紹介されていた `while` ループによるポーリング方式は不要となった。
+**変更理由**: Native sidecar により、FUSE マウント完了を保証してからアプリケーションコンテナを起動する信頼性の高い順序制御が可能になりました。調査レポートで紹介されていた `while` ループによるポーリング方式は不要となりました。
 
 ---
 
@@ -34,11 +34,11 @@
 |---|---|---|
 | **アプローチ** | fuse-starter / fusermount3-proxy の2種 | **fusermount3-proxy のみ** |
 
-**変更理由**: 本実装の対象である sshfs・s3fs はいずれも libfuse3 ベースであり、fusermount3-proxy アプローチで統一的に対応可能。fuse-starter は不採用とした。
+**変更理由**: 本実装の対象である sshfs・s3fs はいずれも libfuse3 ベースであり、fusermount3-proxy アプローチで統一的に対応可能です。fuse-starter は不採用としました。
 
 **実装方式の詳細**:
 
-調査レポートでは「FUSE 実装が fusermount3 の呼び出しに失敗すると fusermount3-proxy が代わりに起動」と記載されているが、本実装ではより直接的な方式を採用した。
+調査レポートでは「FUSE 実装が fusermount3 の呼び出しに失敗すると fusermount3-proxy が代わりに起動」と記載されていますが、本実装ではより直接的な方式を採用しました。
 
 ```
 Dockerfile:
@@ -48,8 +48,8 @@ entrypoint.sh:
   touch /dev/fuse
 ```
 
-1. fusermount3-proxy バイナリを `/bin/fusermount3` として直接配置（バイナリ差し替え）
-2. `touch /dev/fuse` で通常ファイルを作成し、libfuse が `/dev/fuse` をキャラクターデバイスとして open できないようにして fusermount3 経由パスにフォールバックさせる
+1. fusermount3-proxy バイナリを `/bin/fusermount3` として直接配置します（バイナリ差し替え）
+2. `touch /dev/fuse` で通常ファイルを作成し、libfuse が `/dev/fuse` をキャラクターデバイスとして open できないようにして fusermount3 経由パスにフォールバックさせます
 
 ---
 
@@ -66,7 +66,7 @@ entrypoint.sh:
 - `csi/csi-driver.yaml`: Namespace (`mfcp-system`) + CSIDriver リソース定義
 - `csi/csi-driver-daemonset.yaml`: DaemonSet + RBAC（pods の get/list/watch、events の create/patch 権限）
 - CSI ドライバーコンテナに加え `node-driver-registrar` (v2.10.0) を含む2コンテナ構成
-- master/control-plane ノードへの tolerations を設定
+- master/control-plane ノードへの tolerations を設定しています
 
 ---
 
@@ -76,18 +76,20 @@ entrypoint.sh:
 |---|---|---|
 | **対象** | mountpoint-s3, goofys, s3fs, ros3fs, gcsfuse, sshfs（6種） | **sshfs, s3fs（2種）** |
 
-**変更理由**: 実運用で必要な sshfs（SSH リモートマウント）と s3fs（S3 互換ストレージ）に絞り、それぞれ独立したディレクトリに以下のファイルを整備した。
+**変更理由**: 実運用で必要な sshfs（SSH リモートマウント）と s3fs（S3 互換ストレージ）に絞り、それぞれ独立したディレクトリに以下のファイルを整備しました。
 
 ```
 sshfs/
   ├── Dockerfile
   ├── entrypoint.sh
-  ├── deploy.yaml
+  ├── deploy-kind.yaml
+  ├── deploy-registry.yaml
   └── README.md
 s3fs/
   ├── Dockerfile
   ├── entrypoint.sh
-  ├── deploy.yaml
+  ├── deploy-kind.yaml
+  ├── deploy-registry.yaml
   └── README.md
 ```
 
@@ -140,13 +142,13 @@ volumeAttributes:
   fdPassingSocketName: mfcp.sock
 ```
 
-UDS ソケットのパスを `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` 環境変数と一致させる必要がある。
+UDS ソケットのパスを `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` 環境変数と一致させる必要があります。
 
 ---
 
 ## 9. リソース制限の追加
 
-調査レポートの Pod マニフェスト例には `resources` の記載がなかったが、本実装では全コンテナに設定を追加した。
+調査レポートの Pod マニフェスト例には `resources` の記載がありませんでしたが、本実装では全コンテナに設定を追加しました。
 
 | コンテナ | CPU requests | CPU limits | Memory requests | Memory limits |
 |---|---|---|---|---|
@@ -161,12 +163,12 @@ UDS ソケットのパスを `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` 環境変数�
 
 | # | 変更項目 | 関連ファイル |
 |---|---|---|
-| 1 | K8s バージョン要件の引き上げ（v1.29+） | `sshfs/deploy.yaml`, `s3fs/deploy.yaml` |
-| 2 | Native sidecar 方式の採用 | `sshfs/deploy.yaml`, `s3fs/deploy.yaml` |
+| 1 | K8s バージョン要件の引き上げ（v1.29+） | `sshfs/deploy-kind.yaml`, `sshfs/deploy-registry.yaml`, `s3fs/deploy-kind.yaml`, `s3fs/deploy-registry.yaml` |
+| 2 | Native sidecar 方式の採用 | `sshfs/deploy-kind.yaml`, `sshfs/deploy-registry.yaml`, `s3fs/deploy-kind.yaml`, `s3fs/deploy-registry.yaml` |
 | 3 | fusermount3-proxy のみ採用 | `sshfs/Dockerfile`, `s3fs/Dockerfile`, `*/entrypoint.sh` |
 | 4 | CSI マニフェストの独自管理 | `csi/csi-driver.yaml`, `csi/csi-driver-daemonset.yaml` |
 | 5 | 対象を sshfs・s3fs に限定 | `sshfs/`, `s3fs/` |
 | 6 | 独自イメージビルド + CI/CD | `*/Dockerfile`, `.github/workflows/docker-image.yml` |
-| 7 | Secret による認証情報管理 | `*/deploy.yaml`, `*/entrypoint.sh` |
-| 8 | CSI ボリューム属性の明示化 | `*/deploy.yaml` |
-| 9 | 全コンテナへのリソース制限追加 | `*/deploy.yaml`, `csi/csi-driver-daemonset.yaml` |
+| 7 | Secret による認証情報管理 | `*/deploy-kind.yaml`, `*/deploy-registry.yaml`, `*/entrypoint.sh` |
+| 8 | CSI ボリューム属性の明示化 | `*/deploy-kind.yaml`, `*/deploy-registry.yaml` |
+| 9 | 全コンテナへのリソース制限追加 | `*/deploy-kind.yaml`, `*/deploy-registry.yaml`, `csi/csi-driver-daemonset.yaml` |

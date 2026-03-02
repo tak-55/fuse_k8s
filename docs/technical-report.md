@@ -8,11 +8,11 @@
 
 ### 課題
 
-FUSE（Filesystem in UserSpace）を Kubernetes Pod 内で利用するには `/dev/fuse` の `open(2)` と `mount(2)` が必要であり、`CAP_SYS_ADMIN` 権限が求められる。一般ユーザーの Pod にこの権限を付与することはセキュリティ上推奨されない。
+FUSE（Filesystem in UserSpace）を Kubernetes Pod 内で利用するには `/dev/fuse` の `open(2)` と `mount(2)` が必要であり、`CAP_SYS_ADMIN` 権限が求められます。一般ユーザーの Pod にこの権限を付与することはセキュリティ上推奨されません。
 
 ### meta-fuse-csi-plugin による解決
 
-`meta-fuse-csi-plugin` は汎用 CSI プラグインとして、特権操作を CSI Driver Pod に集約し、User Pod は `CAP_SYS_ADMIN` なしで FUSE マウントを利用可能にする。
+`meta-fuse-csi-plugin` は汎用 CSI プラグインとして、特権操作を CSI Driver Pod に集約し、User Pod は `CAP_SYS_ADMIN` なしで FUSE マウントを利用可能にします。
 
 ```mermaid
 graph LR
@@ -48,7 +48,7 @@ graph TB
     style User fill:#dae8fc,stroke:#6c8ebf
 ```
 
-`SCM_RIGHTS` メッセージを利用した UDS 経由の fd 受け渡しにより、特権操作はクラスター管理者管理の Pod に限定される。
+`SCM_RIGHTS` メッセージを利用した UDS 経由の fd 受け渡しにより、特権操作はクラスター管理者管理の Pod に限定されます。
 
 ---
 
@@ -76,7 +76,7 @@ graph TB
 
 ## 3. 本実装での変更点
 
-meta-fuse-csi-plugin の調査結果をもとに、以下の設計判断を行った。
+meta-fuse-csi-plugin の調査結果をもとに、以下の設計判断を行いました。
 
 ### 3.1 Kubernetes バージョン要件の引き上げ
 
@@ -84,7 +84,7 @@ meta-fuse-csi-plugin の調査結果をもとに、以下の設計判断を行�
 |---|---|---|
 | **要件** | K8s 1.20 以上推奨 | **K8s v1.29+ 必須** |
 
-Kubernetes v1.29 で GA となった [SidecarContainers](https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/) 機能（`initContainers` + `restartPolicy: Always`）を前提とした設計を採用。`startupProbe` でマウント完了を保証してから app コンテナを起動する。オリジナルで紹介されていた `while` ループによるポーリング方式は不要となった。
+Kubernetes v1.29 で GA となった [SidecarContainers](https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/) 機能（`initContainers` + `restartPolicy: Always`）を前提とした設計を採用しました。`startupProbe` でマウント完了を保証してから app コンテナを起動します。オリジナルで紹介されていた `while` ループによるポーリング方式は不要となりました。
 
 ### 3.2 fusermount3-proxy のみ採用
 
@@ -92,12 +92,12 @@ Kubernetes v1.29 で GA となった [SidecarContainers](https://kubernetes.io/d
 |---|---|---|
 | **アプローチ** | fuse-starter / fusermount3-proxy の2種 | **fusermount3-proxy のみ** |
 
-対象の sshfs・s3fs はいずれも libfuse3 ベースであり、fusermount3-proxy で統一的に対応可能。
+対象の sshfs・s3fs はいずれも libfuse3 ベースであり、fusermount3-proxy で統一的に対応可能です。
 
 **実装方式:**
 
-1. Dockerfile で fusermount3-proxy バイナリを `/bin/fusermount3` として直接配置（バイナリ差し替え）
-2. entrypoint.sh で `touch /dev/fuse` により通常ファイルを作成し、libfuse を fusermount3 経由パスにフォールバックさせる
+1. Dockerfile で fusermount3-proxy バイナリを `/bin/fusermount3` として直接配置します（バイナリ差し替え）
+2. entrypoint.sh で `touch /dev/fuse` により通常ファイルを作成し、libfuse を fusermount3 経由パスにフォールバックさせます
 
 ### 3.3 対象 FUSE 実装の限定
 
@@ -113,7 +113,7 @@ Kubernetes v1.29 で GA となった [SidecarContainers](https://kubernetes.io/d
 | **RBAC** | 記載なし | ServiceAccount, ClusterRole, ClusterRoleBinding を追加 |
 | **イメージバージョン** | `latest` | `v0.2.2` 固定 |
 
-CSI ドライバーコンテナに加え `node-driver-registrar` (v2.10.0) を含む2コンテナ構成。master/control-plane ノードへの tolerations を設定。
+CSI ドライバーコンテナに加え `node-driver-registrar` (v2.10.0) を含む2コンテナ構成です。master/control-plane ノードへの tolerations を設定しています。
 
 ### 3.5 Docker イメージのビルド・配布
 
@@ -136,7 +136,7 @@ CSI ドライバーコンテナに加え `node-driver-registrar` (v2.10.0) を�
 
 ### 3.7 CSI ボリューム属性の明示化
 
-オリジナルでは `fdPassingEmptyDirName` のみだが、本実装では4属性を明示的に設定。
+オリジナルでは `fdPassingEmptyDirName` のみですが、本実装では4属性を明示的に設定しています。
 
 ```yaml
 volumeAttributes:
@@ -148,7 +148,7 @@ volumeAttributes:
 
 ### 3.8 リソース制限の追加
 
-全コンテナに requests/limits を設定。
+全コンテナに requests/limits を設定しています。
 
 | コンテナ | CPU requests | CPU limits | Memory requests | Memory limits |
 |---|---|---|---|---|
@@ -190,7 +190,7 @@ kubectl cluster-info --context kind-fuse-dev
 
 ### ステップ 1: CSI ドライバーのデプロイ
 
-すべての FUSE 実装で共通（クラスターにつき1回のみ）。
+すべての FUSE 実装で共通です（クラスターにつき1回のみ）。
 
 ```bash
 kubectl apply -f csi/csi-driver.yaml
@@ -249,7 +249,7 @@ kubectl create secret generic ssh-key \
 
 #### マニフェストの編集
 
-kind 環境では `sshfs/deploy-kind.yaml`、レジストリ利用時は `sshfs/deploy-registry.yaml` を使用。
+kind 環境では `sshfs/deploy-kind.yaml`、レジストリ利用時は `sshfs/deploy-registry.yaml` を使用します。
 
 | 環境変数 | 説明 | 例 |
 |---------|------|-----|
@@ -287,7 +287,7 @@ kubectl create secret generic s3-credentials \
 
 #### マニフェストの編集
 
-kind 環境では `s3fs/deploy-kind.yaml`、レジストリ利用時は `s3fs/deploy-registry.yaml` を使用。
+kind 環境では `s3fs/deploy-kind.yaml`、レジストリ利用時は `s3fs/deploy-registry.yaml` を使用します。
 
 | 環境変数 | 説明 | 例 |
 |---------|------|-----|
