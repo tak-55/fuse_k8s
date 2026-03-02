@@ -152,7 +152,7 @@ overlays/local/
 # -----------------------------------------------------------------------------
 # Claude Code
 .claude/
-# CLAUDE.md
+CLAUDE.md
 
 # Cursor
 .cursor/
