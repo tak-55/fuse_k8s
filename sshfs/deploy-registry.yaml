@@ -36,9 +36,8 @@ spec:
   # -----------------------------------------------------------------------
   initContainers:
     - name: sshfs-proxy
-      # 自環境のレジストリに書き換えてください
-      image: your-registry/sshfs-proxy:latest
-      imagePullPolicy: IfNotPresent
+      image: ghcr.io/tak-lab55/fuse_k8s-sshfs:latest
+      imagePullPolicy: Always
       securityContext:
         privileged: true
       restartPolicy: Always   # サイドカーとして動作 (v1.29+)
@@ -153,6 +152,10 @@ spec:
       secret:
         secretName: ssh-key
         defaultMode: 0400
+
+  # プライベートリポジトリの場合は以下のコメントを外してください
+  # imagePullSecrets:
+  #   - name: ghcr-secret
 
   # sshfs コンテナが正常にアンマウントするための猶予時間
   terminationGracePeriodSeconds: 30

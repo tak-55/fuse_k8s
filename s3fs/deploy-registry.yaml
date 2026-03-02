@@ -39,9 +39,8 @@ spec:
   # -----------------------------------------------------------------------
   initContainers:
     - name: s3fs-proxy
-      # 自環境のレジストリに書き換えてください
-      image: your-registry/s3fs-proxy:latest
-      imagePullPolicy: IfNotPresent
+      image: ghcr.io/tak-lab55/fuse_k8s-s3fs:latest
+      imagePullPolicy: Always
       securityContext:
         privileged: true
       restartPolicy: Always   # サイドカーとして動作 (v1.29+)
@@ -155,4 +154,8 @@ spec:
           fdPassingSocketName: mfcp.sock
 
   # s3fs コンテナが正常にアンマウントするための猶予時間
+  # プライベートリポジトリの場合は以下のコメントを外してください
+  # imagePullSecrets:
+  #   - name: ghcr-secret
+
   terminationGracePeriodSeconds: 30

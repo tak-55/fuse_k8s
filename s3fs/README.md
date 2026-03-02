@@ -39,7 +39,26 @@ kind load docker-image s3fs-proxy:latest --name fuse-dev
 **レジストリ利用の場合:**
 
 GitHub Actions により main ブランチへの push 時に自動ビルド・プッシュされます。
-`deploy-registry.yaml` の `image` を自環境のレジストリに書き換えてください。
+イメージは以下のURLで公開されます：
+
+```
+ghcr.io/tak-lab55/fuse_k8s-s3fs:latest
+```
+
+リポジトリが **プライベート** の場合、`ghcr.io` からpullするには PAT 認証が必要です。
+
+```bash
+# PAT で ghcr.io にログイン（ローカルでpullする場合）
+echo <YOUR_PAT> | docker login ghcr.io -u <GITHUB_USERNAME> --password-stdin
+
+# Kubernetes からpullする場合は imagePullSecret を作成
+kubectl create secret docker-registry ghcr-secret \
+  --docker-server=ghcr.io \
+  --docker-username=<GITHUB_USERNAME> \
+  --docker-password=<YOUR_PAT>
+```
+
+PAT の発行方法や `imagePullSecrets` の設定方法は [メインのREADME](../README.md#2-プライベートリポジトリの場合イメージ認証設定) を参照してください。
 
 ### 2. S3認証情報Secretの作成
 
