@@ -90,6 +90,19 @@ kubectl create secret generic ssh-key \
 | `SSHFS_REMOTE_PATH` | リモートパス | `/home/demouser` |
 | `SSHFS_PORT` | SSHポート番号 | `22` |
 
+> **chroot 環境 (SFTP subsystem) を使用している場合の注意**
+>
+> SSH サーバー側で `ChrootDirectory` が設定されている場合（`/etc/ssh/sshd_config` の `Subsystem sftp internal-sftp` と組み合わせた構成など）、クライアントから見えるルート (`/`) はサーバー側の chroot ディレクトリになります。
+>
+> 例: サーバーの `ChrootDirectory` が `/srv/data/demouser` の場合
+>
+> | 実際のサーバー上のパス | `SSHFS_REMOTE_PATH` に指定する値 |
+> |----------------------|--------------------------------|
+> | `/srv/data/demouser/files` | `/files` |
+> | `/srv/data/demouser` (ルート直下) | `/` |
+>
+> chroot 環境では絶対パスがリセットされるため、**chroot ディレクトリからの相対パス** を指定してください。
+
 ### 4. デプロイ
 
 ```bash
@@ -122,7 +135,7 @@ sshfs-proxy サイドカーは以下の環境変数で動作を制御できま�
 |--------|------|-----------|------|
 | `SSHFS_HOST` | ✓ | `localhost` | SSH接続先ホスト (IP/ホスト名) |
 | `SSHFS_USER` | ✓ | `root` | SSHユーザー名 |
-| `SSHFS_REMOTE_PATH` | | `/root/sshfs-example` | リモートマウントパス |
+| `SSHFS_REMOTE_PATH` | | `/root/sshfs-example` | リモートマウントパス。chroot 環境では chroot ディレクトリからの相対パスを指定 |
 | `SSHFS_PORT` | | `22` | SSHポート番号 |
 | `SSHFS_MOUNT_POINT` | | `/tmp` | マウント先パス |
 | `USE_LOCAL_SSHD` | | `false` | `true`でコンテナ内sshdを起動 (デモ用) |
@@ -169,6 +182,16 @@ kubectl logs -n mfcp-system -l app=meta-fuse-csi-plugin
    # SSH経由でリモートパスが存在するか確認
    ssh ${SSHFS_USER}@${SSHFS_HOST} "ls -la ${SSHFS_REMOTE_PATH}"
    ```
+
+4. chroot 環境でのパス確認：
+   SFTP サブシステムで `ChrootDirectory` が設定されている場合、`ssh` コマンドでは通常のシェルが起動し chroot が適用されないため、上記コマンドでパスが見えてもマウントに失敗することがあります。
+   SFTP の動作を直接確認するには sftp コマンドを使用してください：
+   ```bash
+   sftp ${SSHFS_USER}@${SSHFS_HOST}
+   sftp> pwd        # chroot 後のカレントディレクトリを確認
+   sftp> ls /       # chroot ルートの内容を確認
+   ```
+   表示されたパスを基に `SSHFS_REMOTE_PATH` を設定してください（chroot ルートからの絶対パス）。
 
 ### 接続がタイムアウトする
 
