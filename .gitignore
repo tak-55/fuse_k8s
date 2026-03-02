@@ -150,8 +150,30 @@ overlays/local/
 # -----------------------------------------------------------------------------
 # Claude Code & AI Tools
 # -----------------------------------------------------------------------------
-# Claude Code project files are already in ~/.claude/
-# (No exclusions needed here)
+# Claude Code
+.claude/
+# CLAUDE.md
+
+# Cursor
+.cursor/
+
+# Gemini CLI
+.gemini/
+
+# Aider
+.aider*
+.aider.conf.yml
+.aider.model.settings.yml
+
+# Copilot
+.github/copilot-instructions.md
+
+# Codeium / Windsurf
+.codeium/
+.windsurf/
+
+# Continue
+.continue/
 
 # -----------------------------------------------------------------------------
 # Dependencies & Packages
