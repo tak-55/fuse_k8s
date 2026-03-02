@@ -71,7 +71,7 @@ jobs:
           context: ${{ matrix.context }}
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          provenance: mode=min
+          provenance: false
           outputs: type=image,name=${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.image-suffix }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
