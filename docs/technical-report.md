@@ -4,7 +4,7 @@
 
 ---
 
-## 1. 背景
+## 背景
 
 ### 課題
 
@@ -52,7 +52,7 @@ graph TB
 
 ---
 
-## 2. meta-fuse-csi-plugin が提供する2つのアプローチ
+## meta-fuse-csi-plugin が提供する2つのアプローチ
 
 | 項目 | fuse-starter | fusermount3-proxy |
 |------|-------------|-------------------|
@@ -74,11 +74,11 @@ graph TB
 
 ---
 
-## 3. 本実装での変更点
+## 本実装での変更点
 
 meta-fuse-csi-plugin の調査結果をもとに、以下の設計判断を行いました。
 
-### 3.1 Kubernetes バージョン要件の引き上げ
+### Kubernetes バージョン要件の引き上げ
 
 | | オリジナル | 本実装 |
 |---|---|---|
@@ -86,7 +86,7 @@ meta-fuse-csi-plugin の調査結果をもとに、以下の設計判断を行�
 
 Kubernetes v1.29 で GA となった [SidecarContainers](https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/) 機能（`initContainers` + `restartPolicy: Always`）を前提とした設計を採用しました。`startupProbe` でマウント完了を保証してから app コンテナを起動します。オリジナルで紹介されていた `while` ループによるポーリング方式は不要となりました。
 
-### 3.2 fusermount3-proxy のみ採用
+### fusermount3-proxy のみ採用
 
 | | オリジナル | 本実装 |
 |---|---|---|
@@ -99,13 +99,13 @@ Kubernetes v1.29 で GA となった [SidecarContainers](https://kubernetes.io/d
 1. Dockerfile で fusermount3-proxy バイナリを `/bin/fusermount3` として直接配置します（バイナリ差し替え）
 2. entrypoint.sh で `touch /dev/fuse` により通常ファイルを作成し、libfuse を fusermount3 経由パスにフォールバックさせます
 
-### 3.3 対象 FUSE 実装の限定
+### 対象 FUSE 実装の限定
 
 | | オリジナル | 本実装 |
 |---|---|---|
 | **対象** | 6種 | **sshfs, s3fs の2種** |
 
-### 3.4 CSI ドライバーマニフェストの独自管理
+### CSI ドライバーマニフェストの独自管理
 
 | | オリジナル | 本実装 |
 |---|---|---|
@@ -115,7 +115,7 @@ Kubernetes v1.29 で GA となった [SidecarContainers](https://kubernetes.io/d
 
 CSI ドライバーコンテナに加え `node-driver-registrar` (v2.10.0) を含む2コンテナ構成です。master/control-plane ノードへの tolerations を設定しています。
 
-### 3.5 Docker イメージのビルド・配布
+### Docker イメージのビルド・配布
 
 | | オリジナル | 本実装 |
 |---|---|---|
@@ -123,7 +123,7 @@ CSI ドライバーコンテナに加え `node-driver-registrar` (v2.10.0) を�
 | **ビルド** | 手動 | GitHub Actions で自動ビルド・プッシュ |
 | **タグ** | なし | `latest` + `YYYYMMDD-<commit sha>` |
 
-### 3.6 認証情報の管理
+### 認証情報の管理
 
 | | オリジナル | 本実装 |
 |---|---|---|
@@ -134,7 +134,7 @@ CSI ドライバーコンテナに加え `node-driver-registrar` (v2.10.0) を�
 | sshfs | `ssh-key` | `private_key` | `secretKeyRef` → 環境変数 → entrypoint.sh でファイル出力 |
 | s3fs | `s3-credentials` | `access_key`, `secret_key` | `secretKeyRef` → 環境変数 → entrypoint.sh で passwd-s3fs 生成 |
 
-### 3.7 CSI ボリューム属性の明示化
+### CSI ボリューム属性の明示化
 
 オリジナルでは `fdPassingEmptyDirName` のみですが、本実装では4属性を明示的に設定しています。
 
@@ -146,7 +146,7 @@ volumeAttributes:
   fdPassingSocketName: mfcp.sock
 ```
 
-### 3.8 リソース制限の追加
+### リソース制限の追加
 
 全コンテナに requests/limits を設定しています。
 
@@ -159,7 +159,7 @@ volumeAttributes:
 
 ---
 
-## 4. 環境設定
+## 環境設定
 
 ### 前提条件
 
@@ -186,7 +186,7 @@ kubectl cluster-info --context kind-fuse-dev
 
 ---
 
-## 5. インストール方法
+## インストール方法
 
 ### ステップ 1: CSI ドライバーのデプロイ
 
@@ -229,7 +229,7 @@ GitHub Actions により main ブランチへの push 時に ghcr.io へ自動�
 
 ---
 
-## 6. 利用方法
+## 利用方法
 
 ### sshfs（SSH リモートファイルシステム）
 
