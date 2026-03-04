@@ -104,6 +104,19 @@ Kubernetes v1.29 で GA となった [SidecarContainers](https://kubernetes.io/d
 
 CSI ドライバーコンテナに加え `node-driver-registrar` (v2.10.0) を含む2コンテナ構成です。master/control-plane ノードへの tolerations を設定しています。
 
+## セキュリティコンテキストの明示設定
+
+全コンテナに `runAsNonRoot: false` を明示的に設定しています。
+
+| 対象 | 設定 |
+|------|------|
+| CSI DaemonSet (csi-driver) | `privileged: true` + `runAsNonRoot: false` |
+| CSI DaemonSet (node-driver-registrar) | `runAsNonRoot: false` |
+| FUSE sidecar | `privileged: true` + `runAsNonRoot: false` |
+| app コンテナ | `runAsNonRoot: false` |
+
+Pod Security Admission が有効な環境で、コンテナイメージのデフォルト設定に依存せずコンテナの起動を保証するための措置です。
+
 ---
 
 ## Docker イメージのビルド・配布

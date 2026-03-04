@@ -146,7 +146,26 @@ UDS ソケットのパスを `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` 環境変数�
 
 ---
 
-## 9. リソース制限の追加
+## 9. セキュリティコンテキストの明示設定
+
+| | 調査レポート | 本実装 |
+|---|---|---|
+| **securityContext** | `privileged: true` のみ（一部コンテナ） | 全コンテナに `runAsNonRoot: false` を明示設定 |
+
+**変更理由**: Pod Security Admission が有効な環境で、コンテナイメージのデフォルト設定に依存せずコンテナの起動を保証するため。
+
+**設定対象**:
+
+| 対象 | 設定 |
+|------|------|
+| CSI DaemonSet (csi-driver) | `privileged: true` + `runAsNonRoot: false` |
+| CSI DaemonSet (node-driver-registrar) | `runAsNonRoot: false` |
+| FUSE sidecar | `privileged: true` + `runAsNonRoot: false` |
+| app コンテナ | `runAsNonRoot: false` |
+
+---
+
+## 10. リソース制限の追加
 
 調査レポートの Pod マニフェスト例には `resources` の記載がありませんでしたが、本実装では全コンテナに設定を追加しました。
 
@@ -171,4 +190,5 @@ UDS ソケットのパスを `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` 環境変数�
 | 6 | 独自イメージビルド + CI/CD | `*/Dockerfile`, `.github/workflows/docker-image.yml` |
 | 7 | Secret による認証情報管理 | `*/deploy-kind.yaml`, `*/deploy-registry.yaml`, `*/entrypoint.sh` |
 | 8 | CSI ボリューム属性の明示化 | `*/deploy-kind.yaml`, `*/deploy-registry.yaml` |
-| 9 | 全コンテナへのリソース制限追加 | `*/deploy-kind.yaml`, `*/deploy-registry.yaml`, `csi/csi-driver-daemonset.yaml` |
+| 9 | セキュリティコンテキストの明示設定 | `*/deploy-kind.yaml`, `*/deploy-registry.yaml`, `csi/csi-driver-daemonset.yaml` |
+| 10 | 全コンテナへのリソース制限追加 | `*/deploy-kind.yaml`, `*/deploy-registry.yaml`, `csi/csi-driver-daemonset.yaml` |

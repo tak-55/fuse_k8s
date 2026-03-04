@@ -40,6 +40,7 @@ spec:
       imagePullPolicy: Never
       securityContext:
         privileged: true
+        runAsNonRoot: false
       restartPolicy: Always   # サイドカーとして動作 (v1.29+)
       env:
         - name: SSHFS_HOST
@@ -108,6 +109,8 @@ spec:
     # -----------------------------------------------------------------------
     - name: app
       image: busybox:stable
+      securityContext:
+        runAsNonRoot: false
       command: ["/bin/sh", "-c"]
       args:
         - |

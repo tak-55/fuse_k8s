@@ -38,7 +38,7 @@ spec:
   # -----------------------------------------------------------------------
   initContainers:
     - name: s3fs-proxy
-      image: ghcr.io/scaleworx-inc/fuse_k8s-s3fs:latest
+      image: ghcr.io/tak-lab55/fuse_k8s-s3fs:latest
       imagePullPolicy: Always
       securityContext:
         privileged: true
@@ -155,9 +155,9 @@ spec:
           fdPassingEmptyDirName: fuse-socket-dir
           fdPassingSocketName: mfcp.sock
 
-  # s3fs コンテナが正常にアンマウントするための猶予時間
   # プライベートリポジトリの場合は以下のコメントを外してください
   # imagePullSecrets:
   #   - name: ghcr-secret
 
+  # s3fs コンテナが正常にアンマウントするための猶予時間
   terminationGracePeriodSeconds: 30

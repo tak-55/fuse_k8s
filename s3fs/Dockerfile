@@ -4,7 +4,7 @@
 # 参考: https://github.com/pfnet-research/meta-fuse-csi-plugin
 #
 # fusermount3-proxy アプローチ:
-#   s3fs は libfuse を使うため fusermount を呼び出す。
+#   s3fs は libfuse3 を使うため fusermount3 を呼び出す。
 #   その fusermount3 を fusermount3-proxy に差し替えることで、
 #   CSI DaemonSet Pod へマウント操作を委譲し、
 #   ユーザー Pod は CAP_SYS_ADMIN 不要でマウント可能になる。

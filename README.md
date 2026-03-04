@@ -253,6 +253,7 @@ kubectl logs -n mfcp-system -l app=meta-fuse-csi-plugin
 ## セキュリティ考慮事項
 
 - **サイドカーコンテナは `privileged: true` で動作**: fusermount3-proxyがUDS通信を行うために必要
+- **`runAsNonRoot: false` の明示的設定**: CSI DaemonSet（csi-driver、node-driver-registrar）、サイドカーコンテナ、アプリコンテナに設定。Pod Security Admission が有効な環境でコンテナの起動を保証するため
 - **アプリケーションコンテナは権限不要**: マウント済みファイルシステムへのアクセスのみ
 - **Secret管理**: SSH鍵やS3認証情報はKubernetes Secretで管理
 - **本番環境での推奨事項**:
