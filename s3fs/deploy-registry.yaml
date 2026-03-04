@@ -43,6 +43,7 @@ spec:
       imagePullPolicy: Always
       securityContext:
         privileged: true
+        runAsNonRoot: false
       restartPolicy: Always   # サイドカーとして動作 (v1.29+)
       env:
         # S3バケット名 (必須)
