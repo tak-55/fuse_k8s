@@ -24,7 +24,6 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: sshfs-example
-  namespace: default
   labels:
     app.kubernetes.io/name: sshfs-proxy
     app.kubernetes.io/component: example
@@ -36,10 +35,11 @@ spec:
   # -----------------------------------------------------------------------
   initContainers:
     - name: sshfs-proxy
-      image: ghcr.io/tak-lab55/fuse_k8s-sshfs:latest
+      image: ghcr.io/scaleworx-inc/fuse_k8s-sshfs:latest
       imagePullPolicy: Always
       securityContext:
         privileged: true
+        runAsNonRoot: false
       restartPolicy: Always   # サイドカーとして動作 (v1.29+)
       env:
         - name: SSHFS_HOST
@@ -108,6 +108,8 @@ spec:
     # -----------------------------------------------------------------------
     - name: app
       image: busybox:stable
+      securityContext:
+        runAsNonRoot: false
       command: ["/bin/sh", "-c"]
       args:
         - |
