@@ -16,24 +16,25 @@ fusermount3-proxyを使用することで、アプリケーションコンテナ
 
 ## アーキテクチャ
 
-```
-┌─────────────────────────────────────────────────────┐
-│  User Pod                                           │
-│  ┌──────────────────┐   ┌──────────────────────┐   │
-│  │ FUSE sidecar     │   │ app container        │   │
-│  │ (init container) │   │ /data → FUSE mount   │   │
-│  │                  │   │                      │   │
-│  │ fusermount3      │   │                      │   │
-│  │ -proxy           │   │                      │   │
-│  └────────┬─────────┘   └──────────────────────┘   │
-│           │ UDS (Unix Domain Socket)                │
-└───────────┼─────────────────────────────────────────┘
-            │
-┌───────────▼─────────────────────────────────────────┐
-│  CSI DaemonSet Pod (各ノードで実行)                 │
-│  CAP_SYS_ADMIN あり                                 │
-│  → open("/dev/fuse") + mount() を代行              │
-└─────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Pod["User Pod"]
+        Sidecar["FUSE Sidecar<br/>(sshfs / s3fs +<br/>fusermount3-proxy)"]
+        App["App Container<br/>/data → FUSE mount"]
+        Sidecar -- "mountPropagation" --> App
+    end
+
+    subgraph CSIPod["CSI DaemonSet Pod"]
+        CSI["meta-fuse-csi-plugin<br/>(CAP_SYS_ADMIN)"]
+    end
+
+    Sidecar -. "UDS" .-> CSI
+
+    style Pod fill:#dae8fc,stroke:#6c8ebf
+    style Sidecar fill:#fff2cc,stroke:#d6b656
+    style App fill:#d5e8d4,stroke:#82b366
+    style CSIPod fill:#f8cecc,stroke:#b85450
+    style CSI fill:#fff,stroke:#b85450
 ```
 
 ### 動作原理
@@ -55,12 +56,14 @@ fuse_k8s/
 ├── sshfs/                         # SSH リモートファイルシステム
 │   ├── Dockerfile                 # sshfs サイドカーイメージ
 │   ├── entrypoint.sh              # sshfs 起動スクリプト
-│   ├── deploy.yaml                # デプロイ用 Pod マニフェスト
+│   ├── deploy-kind.yaml           # kind 向けデプロイマニフェスト
+│   ├── deploy-registry.yaml       # レジストリ向けデプロイマニフェスト
 │   └── README.md                  # sshfs 詳細ドキュメント
 └── s3fs/                          # S3 互換ストレージ
     ├── Dockerfile                 # s3fs サイドカーイメージ
     ├── entrypoint.sh              # s3fs 起動スクリプト
-    ├── deploy.yaml                # デプロイ用 Pod マニフェスト
+    ├── deploy-kind.yaml           # kind 向けデプロイマニフェスト
+    ├── deploy-registry.yaml       # レジストリ向けデプロイマニフェスト
     └── README.md                  # s3fs 詳細ドキュメント
 ```
 
@@ -70,9 +73,46 @@ fuse_k8s/
 
 - Kubernetes v1.29+ (SidecarContainers 機能が必要)
 - kubectl がクラスターに接続済み
-- Docker または Podman (イメージビルド用)
 
-### 2. CSI ドライバーのデプロイ
+### 2. プライベートリポジトリの場合：イメージ認証設定
+
+このリポジトリが **プライベート** に設定されている場合、GitHub Container Registry (`ghcr.io`) からイメージをpullするには GitHub Personal Access Token (PAT) が必要です。
+
+#### PAT の発行
+
+1. GitHub → **Settings** → **Developer settings** → **Personal access tokens** → **Tokens (classic)**
+2. **Generate new token** をクリック
+3. スコープで **`read:packages`** にチェックを入れてトークンを生成
+4. 生成されたトークンをメモ（一度しか表示されません）
+
+#### Docker CLI でのログイン（ローカルでイメージをpullする場合）
+
+```bash
+echo <YOUR_PAT> | docker login ghcr.io -u <GITHUB_USERNAME> --password-stdin
+```
+
+#### Kubernetes での imagePullSecret 作成（クラスターからpullする場合）
+
+Pod が `ghcr.io` からイメージをpullできるよう、Secret を作成します：
+
+```bash
+kubectl create secret docker-registry ghcr-secret \
+  --docker-server=ghcr.io \
+  --docker-username=<GITHUB_USERNAME> \
+  --docker-password=<YOUR_PAT>
+```
+
+作成した Secret は、`deploy-registry.yaml` の `imagePullSecrets` に追加してください：
+
+```yaml
+spec:
+  imagePullSecrets:
+    - name: ghcr-secret
+```
+
+> **注意**: リポジトリが **パブリック** の場合、この手順は不要です。
+
+### 3. CSI ドライバーのデプロイ
 
 すべてのFUSE実装で共通のCSIドライバーをデプロイします（1回のみ実施）。
 
@@ -85,7 +125,7 @@ kubectl get ds -n mfcp-system
 kubectl get pods -n mfcp-system
 ```
 
-### 3. 使用するファイルシステムを選択
+### 4. 使用するファイルシステムを選択
 
 各ファイルシステムの詳細なセットアップ手順は、それぞれのREADMEを参照してください：
 
@@ -115,25 +155,9 @@ cd s3fs/
 
 ## 開発・テスト
 
-### イメージのビルド
-
-各ディレクトリでDockerイメージをビルドできます。
-
-```bash
-# sshfs
-cd sshfs/
-docker build -t sshfs-proxy:latest .
-
-# s3fs
-cd s3fs/
-docker build -t s3fs-proxy:latest .
-```
-
 ### kind での開発
 
 #### kind クラスターの作成
-
-ローカル開発環境用のKubernetesクラスターを作成します。
 
 ```bash
 # kind のインストール (未インストールの場合)
@@ -152,12 +176,14 @@ kind create cluster --name fuse-dev
 kubectl cluster-info --context kind-fuse-dev
 ```
 
-#### イメージのロード
-
-ビルドしたイメージをkindクラスターにロードします。
+#### イメージのビルドとロード
 
 ```bash
-# イメージをkindにロード
+# ビルド
+docker build -t sshfs-proxy:latest ./sshfs/
+docker build -t s3fs-proxy:latest ./s3fs/
+
+# kind にロード
 kind load docker-image sshfs-proxy:latest --name fuse-dev
 kind load docker-image s3fs-proxy:latest --name fuse-dev
 
@@ -165,7 +191,13 @@ kind load docker-image s3fs-proxy:latest --name fuse-dev
 docker exec -it fuse-dev-control-plane crictl images | grep proxy
 ```
 
-> **注意**: deploy.yaml の `imagePullPolicy` を `Never` または `IfNotPresent` に設定してください。
+#### デプロイ
+
+```bash
+# kind 向けマニフェストを使用
+kubectl apply -f sshfs/deploy-kind.yaml
+kubectl apply -f s3fs/deploy-kind.yaml
+```
 
 #### kind クラスターの削除
 

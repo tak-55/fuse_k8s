@@ -26,33 +26,39 @@ meta-fuse-csi-pluginを使用して、SSHリモートファイルシステムを
 
 ## セットアップ手順
 
-### 1. sshfs サイドカーイメージのビルド & プッシュ
+### 1. サイドカーイメージの準備
 
-Dockerfile はマルチステージビルドで、Stage 1 で `fusermount3-proxy` を Go でビルドし、
-Stage 2 で Ubuntu 22.04 ベースの sshfs イメージに組み込みます。
+**kind 環境の場合:**
 
 ```bash
-# Dockerfile 内の git clone が meta-fuse-csi-plugin リポジトリを自動取得するため、
-# ソースの事前配置は不要
-
 cd sshfs/
 docker build -t sshfs-proxy:latest .
+kind load docker-image sshfs-proxy:latest --name fuse-dev
 ```
 
-**レジストリにプッシュする場合:**
+**レジストリ利用の場合:**
+
+GitHub Actions により main ブランチへの push 時に自動ビルド・プッシュされます。
+イメージは以下のURLで公開されます：
+
+```
+ghcr.io/scaleworx-inc/fuse_k8s-sshfs:latest
+```
+
+リポジトリが **プライベート** の場合、`ghcr.io` からpullするには PAT 認証が必要です。
 
 ```bash
-docker tag sshfs-proxy:latest your-registry/sshfs-proxy:latest
-docker push your-registry/sshfs-proxy:latest
+# PAT で ghcr.io にログイン（ローカルでpullする場合）
+echo <YOUR_PAT> | docker login ghcr.io -u <GITHUB_USERNAME> --password-stdin
+
+# Kubernetes からpullする場合は imagePullSecret を作成
+kubectl create secret docker-registry ghcr-secret \
+  --docker-server=ghcr.io \
+  --docker-username=<GITHUB_USERNAME> \
+  --docker-password=<YOUR_PAT>
 ```
 
-**kind を使う場合:**
-
-```bash
-kind load docker-image sshfs-proxy:latest
-```
-
-> kind の場合、deploy.yaml の `imagePullPolicy` が `Never` または `IfNotPresent` であることを確認してください。
+PAT の発行方法や `imagePullSecrets` の設定方法は [メインのREADME](../README.md#2-プライベートリポジトリの場合イメージ認証設定) を参照してください。
 
 ### 2. SSH鍵の準備
 
@@ -84,10 +90,28 @@ kubectl create secret generic ssh-key \
 | `SSHFS_REMOTE_PATH` | リモートパス | `/home/demouser` |
 | `SSHFS_PORT` | SSHポート番号 | `22` |
 
+> **chroot 環境 (SFTP subsystem) を使用している場合の注意**
+>
+> SSH サーバー側で `ChrootDirectory` が設定されている場合（`/etc/ssh/sshd_config` の `Subsystem sftp internal-sftp` と組み合わせた構成など）、クライアントから見えるルート (`/`) はサーバー側の chroot ディレクトリになります。
+>
+> 例: サーバーの `ChrootDirectory` が `/srv/data/demouser` の場合
+>
+> | 実際のサーバー上のパス | `SSHFS_REMOTE_PATH` に指定する値 |
+> |----------------------|--------------------------------|
+> | `/srv/data/demouser/files` | `/files` |
+> | `/srv/data/demouser` (ルート直下) | `/` |
+>
+> chroot 環境では絶対パスがリセットされるため、**chroot ディレクトリからの相対パス** を指定してください。
+
 ### 4. デプロイ
 
 ```bash
-kubectl apply -f deploy.yaml
+# kind 環境の場合
+kubectl apply -f deploy-kind.yaml
+
+# レジストリからイメージをプルする場合
+# deploy-registry.yaml の image を自環境のレジストリに書き換えてください
+kubectl apply -f deploy-registry.yaml
 ```
 
 ### 5. 動作確認
@@ -111,7 +135,7 @@ sshfs-proxy サイドカーは以下の環境変数で動作を制御できま�
 |--------|------|-----------|------|
 | `SSHFS_HOST` | ✓ | `localhost` | SSH接続先ホスト (IP/ホスト名) |
 | `SSHFS_USER` | ✓ | `root` | SSHユーザー名 |
-| `SSHFS_REMOTE_PATH` | | `/root/sshfs-example` | リモートマウントパス |
+| `SSHFS_REMOTE_PATH` | | `/root/sshfs-example` | リモートマウントパス。chroot 環境では chroot ディレクトリからの相対パスを指定 |
 | `SSHFS_PORT` | | `22` | SSHポート番号 |
 | `SSHFS_MOUNT_POINT` | | `/tmp` | マウント先パス |
 | `USE_LOCAL_SSHD` | | `false` | `true`でコンテナ内sshdを起動 (デモ用) |
@@ -158,6 +182,16 @@ kubectl logs -n mfcp-system -l app=meta-fuse-csi-plugin
    # SSH経由でリモートパスが存在するか確認
    ssh ${SSHFS_USER}@${SSHFS_HOST} "ls -la ${SSHFS_REMOTE_PATH}"
    ```
+
+4. chroot 環境でのパス確認：
+   SFTP サブシステムで `ChrootDirectory` が設定されている場合、`ssh` コマンドでは通常のシェルが起動し chroot が適用されないため、上記コマンドでパスが見えてもマウントに失敗することがあります。
+   SFTP の動作を直接確認するには sftp コマンドを使用してください：
+   ```bash
+   sftp ${SSHFS_USER}@${SSHFS_HOST}
+   sftp> pwd        # chroot 後のカレントディレクトリを確認
+   sftp> ls /       # chroot ルートの内容を確認
+   ```
+   表示されたパスを基に `SSHFS_REMOTE_PATH` を設定してください（chroot ルートからの絶対パス）。
 
 ### 接続がタイムアウトする
 

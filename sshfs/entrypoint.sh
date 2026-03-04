@@ -50,15 +50,13 @@ fi
 touch /dev/fuse
 
 # -----------------------------------------------------------------------
-# (無効化) SSH秘密鍵を環境変数からファイルに出力
-# 理由: 下記の sshfs コマンドでは -o IdentityFile=/secrets/ssh/private_key を使用しており
-#       ここで書き出したファイル (/root/.ssh/private_key) は参照されないため。
+# SSH秘密鍵を環境変数からファイルに出力
 # -----------------------------------------------------------------------
-# if [ -n "$SSH_PRIVATE_KEY" ]; then
-#     mkdir -p /root/.ssh
-#     echo "$SSH_PRIVATE_KEY" > /root/.ssh/private_key
-#     chmod 600 /root/.ssh/private_key
-# fi
+if [ -n "$SSH_PRIVATE_KEY" ]; then
+    mkdir -p /root/.ssh
+    echo "$SSH_PRIVATE_KEY" > /root/.ssh/private_key
+    chmod 600 /root/.ssh/private_key
+fi
 
 # -----------------------------------------------------------------------
 # sshfs をフォアグラウンドで起動 (-f)
@@ -72,7 +70,6 @@ echo "[INFO] sshfs を起動します: ${SSHFS_USER}@${SSHFS_HOST}:${SSHFS_REMOT
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
     -o IdentityFile=/secrets/ssh/private_key \
-    -o GSSAPIAuthentication=no \
     -f \
     &
 
