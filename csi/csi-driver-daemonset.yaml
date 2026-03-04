@@ -88,6 +88,7 @@ spec:
             # FUSEマウントに必要な特権 (CAP_SYS_ADMIN)
             # ユーザーPod側には付与不要
             privileged: true
+            runAsNonRoot: false
           volumeMounts:
             # CSI ソケットディレクトリ
             - name: socket-dir
@@ -114,6 +115,8 @@ spec:
           # kubelet plugin registrar: CSIソケットをkubeletに登録する
           image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.0
           imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: false
           args:
             - "--csi-address=/csi/csi.sock"
             - "--kubelet-registration-path=/var/lib/kubelet/plugins/meta-fuse-csi-plugin.csi.storage.pfn.io/csi.sock"
