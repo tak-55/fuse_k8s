@@ -109,6 +109,8 @@ spec:
     # -----------------------------------------------------------------------
     - name: app
       image: busybox:stable
+      securityContext:
+        runAsNonRoot: false
       command: ["/bin/sh", "-c"]
       args:
         - |
