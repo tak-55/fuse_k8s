@@ -155,9 +155,9 @@ spec:
           fdPassingEmptyDirName: fuse-socket-dir
           fdPassingSocketName: mfcp.sock
 
-  # s3fs コンテナが正常にアンマウントするための猶予時間
   # プライベートリポジトリの場合は以下のコメントを外してください
   # imagePullSecrets:
   #   - name: ghcr-secret
 
+  # s3fs コンテナが正常にアンマウントするための猶予時間
   terminationGracePeriodSeconds: 30
