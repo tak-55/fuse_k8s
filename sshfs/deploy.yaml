@@ -11,7 +11,7 @@
 #     └─ touch /dev/fuse            (libfuse に fusermount3 経由を強制)
 #     └─ sshfs ... -f               (フォアグラウンド起動)
 #     └─ fusermount3-proxy          (fusermount3 として差し替え済み)
-#          └─ UDS ─────────────────> [CSI DaemonSet (CAP_SYS_ADMIN)]
+#          └─ Unix Domain Socket (UDS) ──────> [CSI DaemonSet (CAP_SYS_ADMIN)]
 #                                        └─ open("/dev/fuse") + mount()
 #   [app container]
 #     └─ /data (HostToContainer 伝播)
@@ -68,6 +68,13 @@ spec:
             configMapKeyRef:
               name: sshfs-config
               key: USE_LOCAL_SSHD
+        # ホスト鍵検証の有効化 (true | false)
+        # デフォルト true (accept-new)。テスト環境では false に設定する
+        - name: SSHFS_STRICT_HOST_KEY_CHECK
+          valueFrom:
+            configMapKeyRef:
+              name: sshfs-config
+              key: SSHFS_STRICT_HOST_KEY_CHECK
         # 秘密鍵のみSecretから環境変数に注入
         - name: SSH_PRIVATE_KEY
           valueFrom:
@@ -79,13 +86,13 @@ spec:
           value: /mnt/sshfs
         # -----------------------------------------------------------------------
         # FUSERMOUNT3PROXY_FDPASSING_SOCKPATH:
-        #   fusermount3-proxy が CSI DaemonSet と通信する UDS ソケットのフルパス。
+        #   fusermount3-proxy が CSI DaemonSet と通信する Unix Domain Socket (UDS) のフルパス。
         #   volumes[].csi.volumeAttributes.socketDir + "/" + socketName と一致させる。
         # -----------------------------------------------------------------------
         - name: FUSERMOUNT3PROXY_FDPASSING_SOCKPATH
           value: /var/lib/mfcp/uds/mfcp.sock
       volumeMounts:
-        # CSI DaemonSet との UDS 通信用ソケットディレクトリ (emptyDir)
+        # CSI DaemonSet との Unix Domain Socket (UDS) 通信用ソケットディレクトリ (emptyDir)
         - name: fuse-socket-dir
           mountPath: /var/lib/mfcp/uds
         # sshfs マウントポイント
@@ -149,7 +156,7 @@ spec:
           memory: 128Mi
 
   volumes:
-    # CSI DaemonSet との UDS 通信用 emptyDir
+    # CSI DaemonSet との Unix Domain Socket (UDS) 通信用 emptyDir
     - name: fuse-socket-dir
       emptyDir: {}
 
@@ -158,9 +165,9 @@ spec:
       csi:
         driver: meta-fuse-csi-plugin.csi.storage.pfn.io
         volumeAttributes:
-          # UDS ソケットのディレクトリパス (fuse-socket-dir マウントポイントと一致)
+          # Unix Domain Socket (UDS) のディレクトリパス (fuse-socket-dir マウントポイントと一致)
           socketDir: /var/lib/mfcp/uds
-          # UDS ソケットファイル名
+          # Unix Domain Socket (UDS) のファイル名
           socketName: mfcp.sock
           fdPassingEmptyDirName: fuse-socket-dir
           fdPassingSocketName: mfcp.sock

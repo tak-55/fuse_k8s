@@ -1,4 +1,4 @@
-# meta-fuse-csi-plugin 外部ストレージマウント調査レポート
+# FUSE向け汎用CSIドライバ meta-fuse-csi-plugin 調査報告書
 
 > **リポジトリ**: [pfnet-research/meta-fuse-csi-plugin](https://github.com/pfnet-research/meta-fuse-csi-plugin)  
 > **ライセンス**: Apache 2.0  
