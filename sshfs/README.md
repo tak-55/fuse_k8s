@@ -79,16 +79,33 @@ kubectl create secret generic ssh-key \
   --from-file=private_key=${HOME}/.ssh/sshfs_key
 ```
 
-### 3. デプロイマニフェストの編集
+### 3. ConfigMap の作成
 
-`deploy.yaml` の以下の環境変数を編集してください：
+接続パラメータは ConfigMap (`sshfs-config`) で管理します。テンプレートからコピーして環境に合わせて編集してください。
 
-| 環境変数 | 説明 | 例 |
+```bash
+# テンプレートからコピー
+cp configmap.example.yaml configmap-kind.yaml
+
+# 環境に合わせて編集
+vi configmap-kind.yaml
+
+# ConfigMap を適用
+kubectl apply -f configmap-kind.yaml
+```
+
+ConfigMap で設定する接続パラメータ：
+
+| キー | 説明 | 例 |
 |---------|------|-----|
 | `SSHFS_HOST` | SSH接続先ホスト | `192.168.72.27` |
 | `SSHFS_USER` | SSHユーザー名 | `demouser` |
 | `SSHFS_REMOTE_PATH` | リモートパス | `/home/demouser` |
 | `SSHFS_PORT` | SSHポート番号 | `22` |
+
+> **注意**: `configmap.example.yaml` 以外の `configmap*.yaml` は `.gitignore` で除外されています。環境固有の設定値を含むため、Git にコミットしないでください。
+
+デプロイマニフェスト (`deploy-kind.yaml` / `deploy.yaml`) は `configMapKeyRef` で ConfigMap から環境変数を参照するため、マニフェスト自体の編集は不要です。
 
 > **chroot 環境 (SFTP subsystem) を使用している場合の注意**
 >
@@ -106,12 +123,11 @@ kubectl create secret generic ssh-key \
 ### 4. デプロイ
 
 ```bash
-# kind 環境の場合
+# kind 環境の場合（ローカルイメージ）
 kubectl apply -f deploy-kind.yaml
 
 # レジストリからイメージをプルする場合
-# deploy-registry.yaml の image を自環境のレジストリに書き換えてください
-kubectl apply -f deploy-registry.yaml
+kubectl apply -f deploy.yaml
 ```
 
 ### 5. 動作確認

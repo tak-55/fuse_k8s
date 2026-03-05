@@ -1,0 +1,26 @@
+# =============================================================================
+# sshfs ConfigMap テンプレート
+#
+# 使い方:
+#   1. このファイルをコピーして環境別の ConfigMap を作成
+#      cp configmap.example.yaml configmap-kind.yaml
+#   2. 環境に合わせて値を編集
+#   3. kubectl apply -f configmap-kind.yaml
+#
+# 注意: configmap.example.yaml 以外の configmap*.yaml は .gitignore で除外されます
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sshfs-config
+data:
+  # SSH 接続先ホスト
+  SSHFS_HOST: "your-ssh-host"
+  # SSH ユーザー名
+  SSHFS_USER: "your-ssh-user"
+  # リモートマウントパス
+  SSHFS_REMOTE_PATH: "/path/to/remote"
+  # SSH ポート番号
+  SSHFS_PORT: "22"
+  # true にするとコンテナ内 sshd を起動（テスト用）
+  USE_LOCAL_SSHD: "false"

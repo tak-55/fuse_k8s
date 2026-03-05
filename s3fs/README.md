@@ -68,25 +68,41 @@ kubectl create secret generic s3-credentials \
   --from-literal=secret_key=YOUR_SECRET_KEY
 ```
 
-### 3. デプロイマニフェストの編集
+### 3. ConfigMap の作成
 
-`deploy.yaml` の以下の環境変数を編集してください：
+接続パラメータは ConfigMap (`s3fs-config`) で管理します。テンプレートからコピーして環境に合わせて編集してください。
 
-| 環境変数 | 説明 | 例 |
+```bash
+# テンプレートからコピー
+cp configmap.example.yaml configmap-kind.yaml
+
+# 環境に合わせて編集
+vi configmap-kind.yaml
+
+# ConfigMap を適用
+kubectl apply -f configmap-kind.yaml
+```
+
+ConfigMap で設定する接続パラメータ：
+
+| キー | 説明 | 例 |
 |---------|------|-----|
 | `S3FS_BUCKET` | S3バケット名 | `my-bucket` |
 | `S3FS_ENDPOINT` | S3エンドポイントURL | `http://minio.default.svc.cluster.local:9000` |
 | `S3FS_REGION` | リージョン | `us-east-1` |
 
+> **注意**: `configmap.example.yaml` 以外の `configmap*.yaml` は `.gitignore` で除外されています。環境固有の設定値を含むため、Git にコミットしないでください。
+
+デプロイマニフェスト (`deploy-kind.yaml` / `deploy.yaml`) は `configMapKeyRef` で ConfigMap から環境変数を参照するため、マニフェスト自体の編集は不要です。
+
 ### 4. デプロイ
 
 ```bash
-# kind 環境の場合
+# kind 環境の場合（ローカルイメージ）
 kubectl apply -f deploy-kind.yaml
 
 # レジストリからイメージをプルする場合
-# deploy-registry.yaml の image を自環境のレジストリに書き換えてください
-kubectl apply -f deploy-registry.yaml
+kubectl apply -f deploy.yaml
 ```
 
 ### 5. 動作確認
