@@ -1,5 +1,5 @@
-# 調査の目的と概要
-本報告書は、FUSE 向け汎用CSIドライバであるmeta-fuse-csi-pluginについて、関連リポジトリに基づき導入に必要な技術情報を整理した調査報告書です。
+# 目的と概要
+本ドキュメントは、FUSE 向け汎用CSIドライバであるmeta-fuse-csi-pluginについて、本番環境で利用可能にするための実装方法をまとめたドキュメントです。
 
 # meta-fuse-csi-pluginとは
 FUSE（Filesystem in UserSpace）を Kubernetes Pod 内で利用するには`/dev/fuse`の`open(2)`と`mount(2)`が必要であり、`CAP_SYS_ADMIN`権限が求められます。一般ユーザーの Pod にこの権限を付与することはセキュリティ上推奨されません。

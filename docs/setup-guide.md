@@ -1,10 +1,10 @@
 # fuse_k8s セットアップガイド
 
 > **関連文書**:
-> - [meta-fuse-csi-plugin 調査レポート](./meta-fuse-csi-plugin-report.md)
+> - [FUSE向け汎用CSIドライバ meta-fuse-csi-plugin 調査報告書](./meta-fuse-csi-plugin-report.md)
 > - [実装変更報告書](./implementation-changes.md)
 
----
+--- 
 
 ## 1. 環境設定
 
