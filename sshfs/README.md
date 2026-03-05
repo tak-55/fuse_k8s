@@ -98,9 +98,9 @@ ConfigMap で設定する接続パラメータ：
 
 | キー | 説明 | 例 |
 |---------|------|-----|
-| `SSHFS_HOST` | SSH接続先ホスト | `192.168.72.27` |
-| `SSHFS_USER` | SSHユーザー名 | `demouser` |
-| `SSHFS_REMOTE_PATH` | リモートパス | `/home/demouser` |
+| `SSHFS_HOST` | SSH接続先ホスト | `ssh.example.com` |
+| `SSHFS_USER` | SSHユーザー名 | `your-user` |
+| `SSHFS_REMOTE_PATH` | リモートパス | `/home/your-user` |
 | `SSHFS_PORT` | SSHポート番号 | `22` |
 
 > **注意**: `configmap.example.yaml` 以外の `configmap*.yaml` は `.gitignore` で除外されています。環境固有の設定値を含むため、Git にコミットしないでください。
@@ -111,12 +111,12 @@ ConfigMap で設定する接続パラメータ：
 >
 > SSH サーバー側で `ChrootDirectory` が設定されている場合（`/etc/ssh/sshd_config` の `Subsystem sftp internal-sftp` と組み合わせた構成など）、クライアントから見えるルート (`/`) はサーバー側の chroot ディレクトリになります。
 >
-> 例: サーバーの `ChrootDirectory` が `/srv/data/demouser` の場合
+> 例: サーバーの `ChrootDirectory` が `/srv/chroot/your-user` の場合
 >
 > | 実際のサーバー上のパス | `SSHFS_REMOTE_PATH` に指定する値 |
 > |----------------------|--------------------------------|
-> | `/srv/data/demouser/files` | `/files` |
-> | `/srv/data/demouser` (ルート直下) | `/` |
+> | `/srv/chroot/your-user/files` | `/files` |
+> | `/srv/chroot/your-user` (ルート直下) | `/` |
 >
 > chroot 環境では絶対パスがリセットされるため、**chroot ディレクトリからの相対パス** を指定してください。
 

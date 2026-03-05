@@ -255,9 +255,9 @@ cp sshfs/configmap.example.yaml sshfs/configmap-kind.yaml
 
 | ConfigMap キー | 説明 | 例 |
 |---------|------|-----|
-| `SSHFS_HOST` | SSH 接続先ホスト | `192.168.72.27` |
-| `SSHFS_USER` | SSH ユーザー名 | `demouser` |
-| `SSHFS_REMOTE_PATH` | リモートパス | `/home/demouser` |
+| `SSHFS_HOST` | SSH 接続先ホスト | `ssh.example.com` |
+| `SSHFS_USER` | SSH ユーザー名 | `your-user` |
+| `SSHFS_REMOTE_PATH` | リモートパス | `/home/your-user` |
 | `SSHFS_PORT` | SSH ポート番号 | `22` |
 
 ### デプロイと動作確認
