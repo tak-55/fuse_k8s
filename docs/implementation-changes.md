@@ -1,6 +1,6 @@
 # 実装変更報告書
 
-> **基準文書**: [meta-fuse-csi-plugin 調査レポート](./meta-fuse-csi-plugin-report.md)
+> **基準文書**: [FUSE向け汎用CSIドライバ meta-fuse-csi-plugin 調査報告書](./meta-fuse-csi-plugin-report.md)
 > **対象リポジトリ**: fuse_k8s（本リポジトリ）
 
 本文書は、調査レポートの内容に対して本リポジトリの実装で変更・決定した事項をまとめたものです。
