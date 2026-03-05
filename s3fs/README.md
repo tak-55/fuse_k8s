@@ -143,7 +143,7 @@ s3fs-proxy サイドカーは以下の環境変数で動作を制御できます
 kubectl logs s3fs-example -c s3fs-proxy
 
 # CSI DaemonSet のログを確認
-kubectl logs -n mfcp-system -l app=meta-fuse-csi-plugin
+kubectl logs -n mfcp-system -l app.kubernetes.io/name=meta-fuse-csi-plugin
 ```
 
 ### マウントが成功しない

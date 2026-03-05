@@ -224,7 +224,7 @@ kubectl get ds -n mfcp-system
 kubectl describe ds -n mfcp-system meta-fuse-csi-plugin
 
 # Podのログ確認
-kubectl logs -n mfcp-system -l app=meta-fuse-csi-plugin
+kubectl logs -n mfcp-system -l app.kubernetes.io/name=meta-fuse-csi-plugin
 ```
 
 ### マウントが失敗する
@@ -247,7 +247,7 @@ kubectl logs -n mfcp-system -l app=meta-fuse-csi-plugin
 
 3. CSI DaemonSetとの通信確認：
    ```bash
-   kubectl logs -n mfcp-system -l app=meta-fuse-csi-plugin
+   kubectl logs -n mfcp-system -l app.kubernetes.io/name=meta-fuse-csi-plugin
    ```
 
 ## セキュリティ考慮事項

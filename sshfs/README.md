@@ -162,7 +162,7 @@ entrypoint.sh を編集することで追加のオプションを指定できま
 kubectl logs sshfs-example -c sshfs-proxy
 
 # CSI DaemonSet のログを確認
-kubectl logs -n mfcp-system -l app=meta-fuse-csi-plugin
+kubectl logs -n mfcp-system -l app.kubernetes.io/name=meta-fuse-csi-plugin
 ```
 
 ### マウントが成功しない
