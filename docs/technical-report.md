@@ -17,7 +17,7 @@ graph LR
             App["App Container"]
             Sidecar -- "mountPropagation" --> App
         end
-        Sidecar -. "UDS<br/>(fd passing)" .-> CSI
+        Sidecar -. "Unix Domain Socket (UDS)<br/>(fd passing)" .-> CSI
     end
 
     style CSIPod fill:#f8cecc,stroke:#b85450

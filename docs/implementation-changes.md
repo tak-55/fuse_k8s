@@ -142,7 +142,7 @@ volumeAttributes:
   fdPassingSocketName: mfcp.sock
 ```
 
-UDS ソケットのパスを `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` 環境変数と一致させる必要があります。
+Unix Domain Socket (UDS) のソケットパスを `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` 環境変数と一致させる必要があります。
 
 ---
 

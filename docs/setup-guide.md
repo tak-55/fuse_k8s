@@ -219,7 +219,7 @@ kubectl exec s3fs-example -c app -- ls -la /data
 | `SSHFS_MOUNT_POINT` | | `/tmp` | マニフェスト | マウント先パス |
 | `USE_LOCAL_SSHD` | | `false` | マニフェスト | `true` でコンテナ内 sshd を起動 |
 | `SSH_PRIVATE_KEY` | | - | Secret | SSH 秘密鍵（環境変数経由で注入する場合） |
-| `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | マニフェスト | UDS ソケットパス |
+| `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | マニフェスト | Unix Domain Socket (UDS) のソケットパス |
 
 ### s3fs サイドカー
 
@@ -232,4 +232,4 @@ kubectl exec s3fs-example -c app -- ls -la /data
 | `AWS_ACCESS_KEY_ID` | ✓ | - | Secret | アクセスキー（Secret から注入） |
 | `AWS_SECRET_ACCESS_KEY` | ✓ | - | Secret | シークレットキー（Secret から注入） |
 | `S3FS_OPTS` | | (空) | マニフェスト | 追加の s3fs オプション |
-| `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | マニフェスト | UDS ソケットパス |
+| `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | マニフェスト | Unix Domain Socket (UDS) のソケットパス |
