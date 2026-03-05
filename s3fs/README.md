@@ -74,13 +74,13 @@ kubectl create secret generic s3-credentials \
 
 ```bash
 # テンプレートからコピー
-cp configmap.example.yaml configmap-kind.yaml
+cp configmap.example.yaml configmap.yaml
 
 # 環境に合わせて編集
-vi configmap-kind.yaml
+vi configmap.yaml
 
 # ConfigMap を適用
-kubectl apply -f configmap-kind.yaml
+kubectl apply -f configmap.yaml
 ```
 
 ConfigMap で設定する接続パラメータ：

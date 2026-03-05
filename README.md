@@ -133,14 +133,14 @@ kubectl get pods -n mfcp-system
 
 ```bash
 # sshfs の場合
-cp sshfs/configmap.example.yaml sshfs/configmap-kind.yaml
-vi sshfs/configmap-kind.yaml    # 環境に合わせて編集
-kubectl apply -f sshfs/configmap-kind.yaml
+cp sshfs/configmap.example.yaml sshfs/configmap.yaml
+vi sshfs/configmap.yaml    # 環境に合わせて編集
+kubectl apply -f sshfs/configmap.yaml
 
 # s3fs の場合
-cp s3fs/configmap.example.yaml s3fs/configmap-kind.yaml
-vi s3fs/configmap-kind.yaml     # 環境に合わせて編集
-kubectl apply -f s3fs/configmap-kind.yaml
+cp s3fs/configmap.example.yaml s3fs/configmap.yaml
+vi s3fs/configmap.yaml     # 環境に合わせて編集
+kubectl apply -f s3fs/configmap.yaml
 ```
 
 > **注意**: `configmap.example.yaml` 以外の `configmap*.yaml` は `.gitignore` で除外されています。環境固有の設定値を含むため、Git にコミットしないでください。
@@ -222,13 +222,13 @@ docker exec -it fuse-dev-control-plane crictl images | grep proxy
 
 ```bash
 # ConfigMap の作成（テンプレートからコピーして編集）
-cp sshfs/configmap.example.yaml sshfs/configmap-kind.yaml
-cp s3fs/configmap.example.yaml s3fs/configmap-kind.yaml
-# 各 configmap-kind.yaml を環境に合わせて編集
+cp sshfs/configmap.example.yaml sshfs/configmap.yaml
+cp s3fs/configmap.example.yaml s3fs/configmap.yaml
+# 各 configmap.yaml を環境に合わせて編集
 
 # ConfigMap の適用
-kubectl apply -f sshfs/configmap-kind.yaml
-kubectl apply -f s3fs/configmap-kind.yaml
+kubectl apply -f sshfs/configmap.yaml
+kubectl apply -f s3fs/configmap.yaml
 
 # kind 向けマニフェストを使用
 kubectl apply -f sshfs/deploy-kind.yaml

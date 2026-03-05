@@ -189,7 +189,7 @@ Unix Domain Socket (UDS) のソケットパスを `FUSERMOUNT3PROXY_FDPASSING_SO
 **実装内容**:
 
 - `configmap.example.yaml` をテンプレートとして各 FUSE ディレクトリに配置
-- 利用者はテンプレートをコピーして環境別の ConfigMap を作成（例: `configmap-kind.yaml`）
+- 利用者はテンプレートをコピーして環境別の ConfigMap を作成（例: `configmap.yaml`）
 - `configmap.example.yaml` 以外の `configmap*.yaml` は `.gitignore` で除外し、環境固有値がリポジトリにコミットされることを防止
 - `deploy-kind.yaml` / `deploy.yaml` の両方が同一の ConfigMap 名を参照するため、マニフェスト自体の編集は不要
 
