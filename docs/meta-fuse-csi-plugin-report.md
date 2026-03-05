@@ -1,18 +1,11 @@
-# FUSE向け汎用CSIドライバ meta-fuse-csi-plugin 調査報告書
+# 概要
+本報告書は、FUSE 向け汎用CSIドライバであるmeta-fuse-csi-pluginについて、技術情報を整理した調査報告書です。
 
-> **リポジトリ**: [pfnet-research/meta-fuse-csi-plugin](https://github.com/pfnet-research/meta-fuse-csi-plugin)  
-> **ライセンス**: Apache 2.0  
-> **開発元**: Preferred Networks, Inc. (PFN)
-
----
-
-## 1. 概要
-
-### meta-fuse-csi-plugin とは
+# meta-fuse-csi-plugin とは
 
 `meta-fuse-csi-plugin` は、Kubernetes Pod において **CAP_SYS_ADMIN** 権限なしに、あらゆる FUSE 実装をマウント・実行できる汎用 CSI (Container Storage Interface) プラグインです。PFN（Preferred Networks）のインターンシップ成果として開発され、`gcs-fuse-csi-driver` をベースに汎用化されています。
 
-### 背景と課題
+# 背景と課題
 
 FUSE（Filesystem in UserSpace）は Linux カーネルの機能で、ユーザー空間でファイルシステムを実装できます。Kubernetes Pod 内で FUSE を利用するには以下の操作が必要です。
 
@@ -21,7 +14,7 @@ FUSE（Filesystem in UserSpace）は Linux カーネルの機能で、ユーザ�
 
 これらの操作には `CAP_SYS_ADMIN` が必要ですが、一般ユーザーの Pod に `CAP_SYS_ADMIN` を付与することはセキュリティ上推奨されません。`meta-fuse-csi-plugin` はこの問題を解決します。
 
-### アーキテクチャ
+# アーキテクチャ
 
 ```mermaid
 graph LR
@@ -47,11 +40,10 @@ graph LR
 - **CSI Driver Pod**: クラスター管理者が DaemonSet として各ノードにデプロイ。特権操作（`/dev/fuse` の open・mount）を代行。`CAP_SYS_ADMIN` はこの Pod のみが保持
 - **User Pod**: ユーザーが任意の FUSE 実装を `CAP_SYS_ADMIN` なしで使用。Sidecar コンテナが Unix Domain Socket (UDS) 経由で CSI Driver Pod と通信
 
----
 
-## 2. 環境設定
+# 環境設定
 
-### 前提条件
+## 前提条件
 
 | 項目 | 要件 |
 |------|------|
@@ -60,7 +52,7 @@ graph LR
 | ノード権限 | CSI Driver Pod 用の `CAP_SYS_ADMIN` をクラスター管理者が許可 |
 | ローカル検証 | kind (Kubernetes in Docker) で動作確認可能 |
 
-### ローカル検証環境の準備（kind）
+## ローカル検証環境の準備（kind）
 
 ```bash
 # kind クラスターの作成
@@ -72,7 +64,7 @@ kubectl cluster-info --context kind-mfcp-test
 
 > **注意**: `gcsfuse` を除く例（mountpoint-s3、goofys、s3fs、sshfs）はローカル kind クラスターで実行可能です。
 
-### サポートされる FUSE 実装
+## サポートされる FUSE 実装
 
 | FUSE 実装 | 対応アプローチ | ローカル kind 対応 |
 |-----------|---------------|------------------|
@@ -83,18 +75,16 @@ kubectl cluster-info --context kind-mfcp-test
 | [gcsfuse](https://github.com/GoogleCloudPlatform/gcsfuse) | fuse-starter | ❌（GCS 必要） |
 | [sshfs](https://github.com/libfuse/sshfs) | fusermount3-proxy | ✅ |
 
----
+# インストール方法
 
-## 3. インストール方法
-
-### ステップ 1: リポジトリのクローン
+## ステップ 1: リポジトリのクローン
 
 ```bash
 git clone https://github.com/pfnet-research/meta-fuse-csi-plugin.git
 cd meta-fuse-csi-plugin
 ```
 
-### ステップ 2: CSI ドライバーのデプロイ
+## ステップ 2: CSI ドライバーのデプロイ
 
 ```bash
 # CSI ドライバーの CRD / Namespace / CSIDriver リソースを作成
@@ -108,7 +98,7 @@ namespace/mfcp-system created
 csidriver.storage.k8s.io/meta-fuse-csi-plugin.csi.storage.pfn.io created
 ```
 
-### ステップ 3: DaemonSet のデプロイ
+## ステップ 3: DaemonSet のデプロイ
 
 ```bash
 # 各ノードに CSI Driver Pod を DaemonSet としてデプロイ
@@ -121,7 +111,7 @@ kubectl apply -f ./deploy/csi-driver-daemonset.yaml
 daemonset.apps/meta-fuse-csi-plugin created
 ```
 
-### ステップ 4: デプロイの確認
+## ステップ 4: デプロイの確認
 
 ```bash
 kubectl get ds -n mfcp-system
@@ -134,15 +124,12 @@ NAME                   DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE
 meta-fuse-csi-plugin   1         1         1       1            1           kubernetes.io/os=linux   28m
 ```
 
----
 
-## 4. 利用方法
+# 利用方法
 
 `meta-fuse-csi-plugin` は 2 つのマウントアプローチを提供しています。
 
----
-
-### アプローチ 1: fuse-starter（直接 fd パッシング）
+## アプローチ 1: fuse-starter（直接 fd パッシング）
 
 **概要**: FUSE 実装が `/dev/fd/X` 形式のマウントポイントを受け付ける場合に使用します。CSI ドライバーから取得した fd を直接 FUSE 実装へ渡します。
 
@@ -219,9 +206,7 @@ spec:
           fdPassingEmptyDirName: fuse-fd-passing
 ```
 
----
-
-### アプローチ 2: fusermount3-proxy（fusermount3 代替）
+## アプローチ 2: fusermount3-proxy（fusermount3 代替）
 
 **概要**: `libfuse3` の `fusermount3` メカニズムを利用します。`fuse-starter` が使えない FUSE 実装（Rust の `fuser` クレート等）に対応します。
 
@@ -286,9 +271,7 @@ spec:
           fdPassingEmptyDirSocketName: fuse-csi-ephemeral.sock
 ```
 
----
-
-### 動作確認
+## 動作確認
 
 ```bash
 # Pod のデプロイ
@@ -308,9 +291,7 @@ total 1
 This is a test file for minio
 ```
 
----
-
-### Sidecar を使えない場合の代替手段
+## Sidecar を使えない場合の代替手段
 
 クラスターで sidecar 機能が使えない場合は、アプリケーションコンテナ内で FUSE マウントを待機する方法が使えます。
 
@@ -329,9 +310,7 @@ This is a test file for minio
 
 > **注意**: この方法では `subPath` によるボリュームマウントは競合が発生するため利用不可です。
 
----
-
-## 5. 2 アプローチの比較
+# アプローチの比較
 
 | 項目 | fuse-starter | fusermount3-proxy |
 |------|-------------|-------------------|
@@ -341,9 +320,7 @@ This is a test file for minio
 | **設定の複雑さ** | やや低い | やや高い（環境変数の設定が必要） |
 | **Rust `fuser` クレート対応** | ❌ | ✅ |
 
----
-
-## 6. セキュリティモデル
+# セキュリティモデル
 
 ```mermaid
 graph TB
@@ -358,9 +335,8 @@ graph TB
 
 `SCM_RIGHTS` メッセージを利用した Unix Domain Socket (UDS) 経由の fd 受け渡しにより、特権操作はクラスター管理者管理の Pod に限定されます。
 
----
 
-## 7. まとめ
+# まとめ
 
 `meta-fuse-csi-plugin` は以下を実現します。
 
@@ -371,10 +347,12 @@ graph TB
 
 ML/DL ワークロードで S3 互換オブジェクトストレージをファイルシステムとして扱いたい場合に特に有効なソリューションです。
 
----
-
 *参考リンク*
 
 - [GitHub リポジトリ](https://github.com/pfnet-research/meta-fuse-csi-plugin)
 - [PFN 技術ブログ（英語）](https://tech.preferred.jp/en/blog/meta-fuse-csi-plugin/)
 - [PFN 技術ブログ（日本語）](https://tech.preferred.jp/ja/blog/meta-fuse-csi-plugin/)
+
+> **リポジトリ**: [pfnet-research/meta-fuse-csi-plugin](https://github.com/pfnet-research/meta-fuse-csi-plugin)  
+> **ライセンス**: Apache 2.0  
+> **開発元**: Preferred Networks, Inc. (PFN)
