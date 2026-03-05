@@ -71,6 +71,13 @@ spec:
             configMapKeyRef:
               name: sshfs-config
               key: USE_LOCAL_SSHD
+        # ホスト鍵検証の有効化 (true | false)
+        # デフォルト true (accept-new)。テスト環境では false に設定する
+        - name: SSHFS_STRICT_HOST_KEY_CHECK
+          valueFrom:
+            configMapKeyRef:
+              name: sshfs-config
+              key: SSHFS_STRICT_HOST_KEY_CHECK
         # 秘密鍵のみSecretから環境変数に注入
         - name: SSH_PRIVATE_KEY
           valueFrom:

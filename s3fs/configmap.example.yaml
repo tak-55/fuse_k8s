@@ -20,3 +20,7 @@ data:
   S3FS_ENDPOINT: "http://your-s3-endpoint:9000"
   # S3 リージョン
   S3FS_REGION: "us-east-1"
+  # TLS証明書検証の無効化 (true | false)
+  # デフォルト: false (検証を有効化)
+  # MinIOなど自己署名証明書環境では "true" に設定する
+  S3FS_NO_CHECK_CERT: "false"

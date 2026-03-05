@@ -9,7 +9,7 @@ meta-fuse-csi-pluginを使用して、SSHリモートファイルシステムを
   └─ touch /dev/fuse            (libfuse に fusermount3 経由を強制)
   └─ sshfs ... -f               (フォアグラウンド起動)
   └─ fusermount3-proxy          (fusermount3 として差し替え済み)
-       └─ UDS ─────────────────> [CSI DaemonSet (CAP_SYS_ADMIN)]
+       └─ Unix Domain Socket (UDS) ──────> [CSI DaemonSet (CAP_SYS_ADMIN)]
                                      └─ open("/dev/fuse") + mount()
 [app container]
   └─ /data (HostToContainer 伝播)
@@ -156,18 +156,24 @@ sshfs-proxy サイドカーは以下の環境変数で動作を制御できま�
 | `SSHFS_MOUNT_POINT` | | `/tmp` | マウント先パス |
 | `USE_LOCAL_SSHD` | | `false` | `true`でコンテナ内sshdを起動 (デモ用) |
 | `SSH_PRIVATE_KEY` | | - | SSH秘密鍵 (環境変数経由で注入する場合) |
-| `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | UDSソケットパス |
+| `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | Unix Domain Socket (UDS) のソケットパス |
+| `SSHFS_STRICT_HOST_KEY_CHECK` | | `true` | `true`: 初回のみ自動受入れ (accept-new) / `false`: 検証無効（テスト用） |
 
 ## sshfs オプションのカスタマイズ
 
 デフォルトで設定されているsshfsオプション：
 - `-p ${SSHFS_PORT}` - SSHポート指定
-- `-o StrictHostKeyChecking=no` - ホストキー検証スキップ
-- `-o UserKnownHostsFile=/dev/null` - known_hostsファイル使用しない
 - `-o IdentityFile=/secrets/ssh/private_key` - 秘密鍵ファイルパス
 - `-f` - フォアグラウンド実行
 
-entrypoint.sh を編集することで追加のオプションを指定できます。
+**ホスト鍵検証**（デフォルト: 有効）:
+
+ConfigMap の `SSHFS_STRICT_HOST_KEY_CHECK` で制御できます。
+
+| `SSHFS_STRICT_HOST_KEY_CHECK` | 内容 |
+|---|---|
+| `true` (デフォルト) | `StrictHostKeyChecking=accept-new` / `UserKnownHostsFile=/root/.ssh/known_hosts` |
+| `false` | `StrictHostKeyChecking=no` / `UserKnownHostsFile=/dev/null`（テスト・開発環境のみ） |
 
 ## トラブルシューティング
 
@@ -220,7 +226,7 @@ kubectl logs -n mfcp-system -l app.kubernetes.io/name=meta-fuse-csi-plugin
 - sshfs は POSIX 互換ですが、通常のファイルシステムと完全に同一ではありません
 - パフォーマンスはネットワークレイテンシに依存します
 - 大量の小さいファイルの操作は遅くなる可能性があります
-- 本番環境ではSSH鍵のパスフレーズ設定とホストキー検証を有効化することを推奨します
+- 本番環境では `SSHFS_STRICT_HOST_KEY_CHECK: "true"` (デフォルト値) のみまま利用しホスト鍵検証を有効にしてください
 
 ## 参考資料
 

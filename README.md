@@ -28,7 +28,7 @@ graph TB
         CSI["meta-fuse-csi-plugin<br/>(CAP_SYS_ADMIN)"]
     end
 
-    Sidecar -. "UDS" .-> CSI
+    Sidecar -. "Unix Domain Socket (UDS)" .-> CSI
 
     style Pod fill:#dae8fc,stroke:#6c8ebf
     style Sidecar fill:#fff2cc,stroke:#d6b656
@@ -41,7 +41,7 @@ graph TB
 
 1. **Sidecarコンテナ**がFUSEファイルシステム（sshfs、s3fs等）を起動
 2. `touch /dev/fuse`により、libfuseがfusermount3経由パスを使用
-3. **fusermount3-proxy**がfusermount3として動作し、UDSでCSI DaemonSetと通信
+3. **fusermount3-proxy**がfusermount3として動作し、Unix Domain Socket (UDS)でCSI DaemonSetと通信
 4. **CSI DaemonSet**が`CAP_SYS_ADMIN`権限でマウント操作を実行
 5. **アプリケーションコンテナ**が権限なしでマウントされたファイルシステムにアクセス
 
@@ -288,14 +288,18 @@ kubectl logs -n mfcp-system -l app.kubernetes.io/name=meta-fuse-csi-plugin
 
 ## セキュリティ考慮事項
 
-- **サイドカーコンテナは `privileged: true` で動作**: fusermount3-proxyがUDS通信を行うために必要
+- **セキュリティオプションはデフォルト有効**: ConfigMap で無効化可能
+  - sshfs: `SSHFS_STRICT_HOST_KEY_CHECK` — デフォルト `true`（`StrictHostKeyChecking=accept-new`）
+  - s3fs: `S3FS_NO_CHECK_CERT` — デフォルト `false`（TLS証明書検証有効）
+- **サイドカーコンテナは `privileged: true` で動作**: fusermount3-proxyがUnix Domain Socket (UDS)通信を行うために必要
 - **`runAsNonRoot: false` の明示的設定**: CSI DaemonSet（csi-driver、node-driver-registrar）、サイドカーコンテナ、アプリコンテナに設定。Pod Security Admission が有効な環境でコンテナの起動を保証するため
 - **アプリケーションコンテナは権限不要**: マウント済みファイルシステムへのアクセスのみ
 - **ConfigMap管理**: 接続パラメータ（ホスト、バケット名等）はKubernetes ConfigMapで管理
 - **Secret管理**: SSH鍵やS3認証情報はKubernetes Secretで管理
 - **本番環境での推奨事項**:
   - SSH鍵にはパスフレーズを設定
-  - S3ではSSL証明書検証を有効化
+  - `SSHFS_STRICT_HOST_KEY_CHECK: "true"`（デフォルト）のまま利用
+  - `S3FS_NO_CHECK_CERT: "false"`（デフォルト）のまま利用
   - 最小権限の原則に従ってIAMロールやSSH権限を設定
 
 ## 参考資料

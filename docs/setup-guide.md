@@ -220,6 +220,7 @@ kubectl exec s3fs-example -c app -- ls -la /data
 | `USE_LOCAL_SSHD` | | `false` | マニフェスト | `true` でコンテナ内 sshd を起動 |
 | `SSH_PRIVATE_KEY` | | - | Secret | SSH 秘密鍵（環境変数経由で注入する場合） |
 | `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | マニフェスト | Unix Domain Socket (UDS) のソケットパス |
+| `SSHFS_STRICT_HOST_KEY_CHECK` | | `true` | ConfigMap | `true`: 初回のみ自動受入れ (accept-new) / `false`: 検証無効（テスト用） |
 
 ### s3fs サイドカー
 
@@ -233,3 +234,4 @@ kubectl exec s3fs-example -c app -- ls -la /data
 | `AWS_SECRET_ACCESS_KEY` | ✓ | - | Secret | シークレットキー（Secret から注入） |
 | `S3FS_OPTS` | | (空) | マニフェスト | 追加の s3fs オプション |
 | `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | マニフェスト | Unix Domain Socket (UDS) のソケットパス |
+| `S3FS_NO_CHECK_CERT` | | `false` | ConfigMap | `true`: TLS証明書検証を無効化（自己署名証明書環境用） / `false`: 検証有効 |

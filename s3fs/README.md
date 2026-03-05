@@ -9,7 +9,7 @@ meta-fuse-csi-pluginを使用して、S3互換ストレージ（MinIO、Ceph、A
   └─ touch /dev/fuse            (libfuse に fusermount3 経由を強制)
   └─ s3fs ... -f                (フォアグラウンド起動)
   └─ fusermount3-proxy          (fusermount3 として差し替え済み)
-       └─ UDS ─────────────────> [CSI DaemonSet (CAP_SYS_ADMIN)]
+       └─ Unix Domain Socket (UDS) ──────> [CSI DaemonSet (CAP_SYS_ADMIN)]
                                      └─ open("/dev/fuse") + mount()
 [app container]
   └─ /data (HostToContainer 伝播)
@@ -131,7 +131,8 @@ s3fs-proxy サイドカーは以下の環境変数で動作を制御できます
 | `AWS_ACCESS_KEY_ID` | ✓ | - | アクセスキー (Secretから注入) |
 | `AWS_SECRET_ACCESS_KEY` | ✓ | - | シークレットキー (Secretから注入) |
 | `S3FS_OPTS` | | (空) | 追加のs3fsオプション |
-| `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | UDSソケットパス |
+| `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | Unix Domain Socket (UDS) のソケットパス |
+| `S3FS_NO_CHECK_CERT` | | `false` | `true`: TLS証明書検証を無効化（自己署名証明書環境用） / `false`: 検証有効 |
 
 ## s3fs オプションのカスタマイズ
 
@@ -147,8 +148,16 @@ s3fs-proxy サイドカーは以下の環境変数で動作を制御できます
 - `-o url=${S3FS_ENDPOINT}` - S3エンドポイント
 - `-o endpoint=${S3FS_REGION}` - リージョン
 - `-o use_path_request_style` - パススタイルリクエスト使用
-- `-o no_check_certificate` - SSL証明書検証スキップ
 - `-f` - フォアグラウンド実行
+
+**TLS 証明書検証**（デフォルト: 有効）:
+
+ConfigMap の `S3FS_NO_CHECK_CERT` で制御できます。
+
+| `S3FS_NO_CHECK_CERT` | 内容 |
+|---|---|
+| `false` (デフォルト) | TLS証明書検証有効 |
+| `true` | 証明書検証を無効化（MinIO等自己署名証明書環境用） |
 
 ## トラブルシューティング
 
@@ -191,7 +200,7 @@ kubectl logs -n mfcp-system -l app.kubernetes.io/name=meta-fuse-csi-plugin
 - s3fs は POSIX 互換ですが、通常のファイルシステムと完全に同一ではありません
 - パフォーマンスは S3 API のレイテンシに依存します
 - 大量の小さいファイルの操作は遅くなる可能性があります
-- 本番環境では SSL 証明書検証を有効化することを推奨します（`no_check_certificate` オプションを削除）
+- 本番環境では `S3FS_NO_CHECK_CERT: "false"` (デフォルト値) のまま利用し TLS 証明書検証を有効にしてください
 
 ## 参考資料
 

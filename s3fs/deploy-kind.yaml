@@ -81,6 +81,13 @@ spec:
         # 追加のs3fsオプション (オプショナル)
         - name: S3FS_OPTS
           value: ""
+        # TLS証明書検証の無効化 (true | false)
+        # デフォルト false (検証有効)。MinIO等自己署名証明書環境では true に設定する
+        - name: S3FS_NO_CHECK_CERT
+          valueFrom:
+            configMapKeyRef:
+              name: s3fs-config
+              key: S3FS_NO_CHECK_CERT
         # -----------------------------------------------------------------------
         # FUSERMOUNT3PROXY_FDPASSING_SOCKPATH:
         #   fusermount3-proxy が CSI DaemonSet と通信する Unix Domain Socket (UDS) のフルパス。

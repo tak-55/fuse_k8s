@@ -24,3 +24,7 @@ data:
   SSHFS_PORT: "22"
   # true にするとコンテナ内 sshd を起動（テスト用）
   USE_LOCAL_SSHD: "false"
+  # ホスト鍵の検証 (true | false)
+  # デフォルト: true (accept-new: 初回のみ自動受け入れ、以降は検証)
+  # テスト・開発環境で完全に無効化したい場合は "false" に設定する
+  SSHFS_STRICT_HOST_KEY_CHECK: "true"
