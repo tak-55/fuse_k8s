@@ -13,19 +13,22 @@
 # =============================================================================
 
 # 環境変数:
-#   S3FS_BUCKET         - S3バケット名       (必須)
-#   S3FS_MOUNT_POINT    - マウント先パス     (デフォルト: /mnt/s3fs)
-#   S3FS_ENDPOINT       - S3エンドポイントURL (必須、例: http://minio.default:9000)
-#   S3FS_REGION         - リージョン         (デフォルト: us-east-1)
-#   AWS_ACCESS_KEY_ID   - アクセスキー       (Secretから注入)
-#   AWS_SECRET_ACCESS_KEY - シークレットキー  (Secretから注入)
-#   S3FS_OPTS           - 追加のs3fsオプション (デフォルト: 空)
+#   S3FS_BUCKET           - S3バケット名             (必須)
+#   S3FS_MOUNT_POINT      - マウント先パス           (デフォルト: /mnt/s3fs)
+#   S3FS_ENDPOINT         - S3エンドポイントURL      (必須、例: http://minio.default:9000)
+#   S3FS_REGION           - リージョン               (デフォルト: us-east-1)
+#   AWS_ACCESS_KEY_ID     - アクセスキー             (Secretから注入)
+#   AWS_SECRET_ACCESS_KEY - シークレットキー          (Secretから注入)
+#   S3FS_OPTS             - 追加のs3fsオプション      (デフォルト: 空)
+#   S3FS_NO_CHECK_CERT    - TLS証明書検証を無効化     (デフォルト: false)
+#                           自己署名証明書環境では "true" に設定する
 
 S3FS_BUCKET="${S3FS_BUCKET}"
 S3FS_MOUNT_POINT="${S3FS_MOUNT_POINT:-/mnt/s3fs}"
 S3FS_ENDPOINT="${S3FS_ENDPOINT}"
 S3FS_REGION="${S3FS_REGION:-us-east-1}"
 S3FS_OPTS="${S3FS_OPTS:-}"
+S3FS_NO_CHECK_CERT="${S3FS_NO_CHECK_CERT:-false}"
 
 # -----------------------------------------------------------------------
 # バケット名とエンドポイントの必須チェック
@@ -76,6 +79,17 @@ echo "[INFO] s3fs を起動します: ${S3FS_BUCKET} -> ${S3FS_MOUNT_POINT}"
 echo "[INFO] エンドポイント: ${S3FS_ENDPOINT}"
 echo "[INFO] リージョン: ${S3FS_REGION}"
 
+# -----------------------------------------------------------------------
+# セキュリティオプション
+# S3FS_NO_CHECK_CERT=true の場合のみ TLS 証明書検証を無効化する
+# デフォルト: 証明書検証を有効にする (false)
+# -----------------------------------------------------------------------
+SEC_OPTS=""
+if [[ "${S3FS_NO_CHECK_CERT}" == "true" ]]; then
+    echo "[WARN] S3FS_NO_CHECK_CERT=true: TLS証明書検証を無効化します（本番環境では非推奨）"
+    SEC_OPTS="-o no_check_certificate"
+fi
+
 /usr/bin/s3fs \
     "${S3FS_BUCKET}" \
     "${S3FS_MOUNT_POINT}" \
@@ -83,7 +97,7 @@ echo "[INFO] リージョン: ${S3FS_REGION}"
     -o url="${S3FS_ENDPOINT}" \
     -o endpoint="${S3FS_REGION}" \
     -o use_path_request_style \
-    -o no_check_certificate \
+    ${SEC_OPTS} \
     ${S3FS_OPTS} \
     -f \
     &

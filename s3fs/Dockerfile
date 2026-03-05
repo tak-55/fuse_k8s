@@ -41,7 +41,7 @@ RUN apt-get update && apt-get upgrade -y
 RUN apt-get install -y ca-certificates wget \
     # libfuse2: fuse-starter アプローチ互換のため
     libfuse2 \
-    # fuse3: s3fs が依存する libfuse を含む
+    # fuse3: s3fs が依存する libfuse3 を含む
     fuse3
 
 # s3fs 本体
