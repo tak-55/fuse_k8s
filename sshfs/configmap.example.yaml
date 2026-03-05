@@ -3,9 +3,9 @@
 #
 # 使い方:
 #   1. このファイルをコピーして環境別の ConfigMap を作成
-#      cp configmap.example.yaml configmap-kind.yaml
+#      cp configmap.example.yaml configmap.yaml
 #   2. 環境に合わせて値を編集
-#   3. kubectl apply -f configmap-kind.yaml
+#   3. kubectl apply -f configmap.yaml
 #
 # 注意: configmap.example.yaml 以外の configmap*.yaml は .gitignore で除外されます
 # =============================================================================

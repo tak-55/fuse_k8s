@@ -249,7 +249,7 @@ kubectl create secret generic ssh-key \
 `sshfs/configmap.example.yaml` をコピーして環境別の ConfigMap を作成します。
 
 ```bash
-cp sshfs/configmap.example.yaml sshfs/configmap-kind.yaml
+cp sshfs/configmap.example.yaml sshfs/configmap.yaml
 # 環境に合わせて値を編集
 ```
 
@@ -264,7 +264,7 @@ cp sshfs/configmap.example.yaml sshfs/configmap-kind.yaml
 
 ```bash
 # ConfigMap を適用
-kubectl apply -f sshfs/configmap-kind.yaml
+kubectl apply -f sshfs/configmap.yaml
 
 # デプロイ（kind 環境）
 kubectl apply -f sshfs/deploy-kind.yaml
@@ -293,7 +293,7 @@ kubectl create secret generic s3-credentials \
 `s3fs/configmap.example.yaml` をコピーして環境別の ConfigMap を作成します。
 
 ```bash
-cp s3fs/configmap.example.yaml s3fs/configmap-kind.yaml
+cp s3fs/configmap.example.yaml s3fs/configmap.yaml
 # 環境に合わせて値を編集
 ```
 
@@ -307,7 +307,7 @@ cp s3fs/configmap.example.yaml s3fs/configmap-kind.yaml
 
 ```bash
 # ConfigMap を適用
-kubectl apply -f s3fs/configmap-kind.yaml
+kubectl apply -f s3fs/configmap.yaml
 
 # デプロイ（kind 環境）
 kubectl apply -f s3fs/deploy-kind.yaml

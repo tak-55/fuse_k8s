@@ -120,9 +120,9 @@ kubectl create secret generic ssh-key \
 接続パラメータは ConfigMap で管理します。テンプレートからコピーして環境に合わせて編集してください。
 
 ```bash
-cp sshfs/configmap.example.yaml sshfs/configmap-kind.yaml
-vi sshfs/configmap-kind.yaml    # 環境に合わせて編集
-kubectl apply -f sshfs/configmap-kind.yaml
+cp sshfs/configmap.example.yaml sshfs/configmap.yaml
+vi sshfs/configmap.yaml    # 環境に合わせて編集
+kubectl apply -f sshfs/configmap.yaml
 ```
 
 ConfigMap で設定するパラメータ：
@@ -170,9 +170,9 @@ kubectl create secret generic s3-credentials \
 接続パラメータは ConfigMap で管理します。テンプレートからコピーして環境に合わせて編集してください。
 
 ```bash
-cp s3fs/configmap.example.yaml s3fs/configmap-kind.yaml
-vi s3fs/configmap-kind.yaml     # 環境に合わせて編集
-kubectl apply -f s3fs/configmap-kind.yaml
+cp s3fs/configmap.example.yaml s3fs/configmap.yaml
+vi s3fs/configmap.yaml     # 環境に合わせて編集
+kubectl apply -f s3fs/configmap.yaml
 ```
 
 ConfigMap で設定するパラメータ：
