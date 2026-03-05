@@ -9,7 +9,7 @@ meta-fuse-csi-pluginを使用して、S3互換ストレージ（MinIO、Ceph、A
   └─ touch /dev/fuse            (libfuse に fusermount3 経由を強制)
   └─ s3fs ... -f                (フォアグラウンド起動)
   └─ fusermount3-proxy          (fusermount3 として差し替え済み)
-       └─ UDS ─────────────────> [CSI DaemonSet (CAP_SYS_ADMIN)]
+       └─ Unix Domain Socket (UDS) ──────> [CSI DaemonSet (CAP_SYS_ADMIN)]
                                      └─ open("/dev/fuse") + mount()
 [app container]
   └─ /data (HostToContainer 伝播)
@@ -68,25 +68,41 @@ kubectl create secret generic s3-credentials \
   --from-literal=secret_key=YOUR_SECRET_KEY
 ```
 
-### 3. デプロイマニフェストの編集
+### 3. ConfigMap の作成
 
-`deploy.yaml` の以下の環境変数を編集してください：
+接続パラメータは ConfigMap (`s3fs-config`) で管理します。テンプレートからコピーして環境に合わせて編集してください。
 
-| 環境変数 | 説明 | 例 |
+```bash
+# テンプレートからコピー
+cp configmap.example.yaml configmap-kind.yaml
+
+# 環境に合わせて編集
+vi configmap-kind.yaml
+
+# ConfigMap を適用
+kubectl apply -f configmap-kind.yaml
+```
+
+ConfigMap で設定する接続パラメータ：
+
+| キー | 説明 | 例 |
 |---------|------|-----|
 | `S3FS_BUCKET` | S3バケット名 | `my-bucket` |
 | `S3FS_ENDPOINT` | S3エンドポイントURL | `http://minio.default.svc.cluster.local:9000` |
 | `S3FS_REGION` | リージョン | `us-east-1` |
 
+> **注意**: `configmap.example.yaml` 以外の `configmap*.yaml` は `.gitignore` で除外されています。環境固有の設定値を含むため、Git にコミットしないでください。
+
+デプロイマニフェスト (`deploy-kind.yaml` / `deploy.yaml`) は `configMapKeyRef` で ConfigMap から環境変数を参照するため、マニフェスト自体の編集は不要です。
+
 ### 4. デプロイ
 
 ```bash
-# kind 環境の場合
+# kind 環境の場合（ローカルイメージ）
 kubectl apply -f deploy-kind.yaml
 
 # レジストリからイメージをプルする場合
-# deploy-registry.yaml の image を自環境のレジストリに書き換えてください
-kubectl apply -f deploy-registry.yaml
+kubectl apply -f deploy.yaml
 ```
 
 ### 5. 動作確認
@@ -115,7 +131,8 @@ s3fs-proxy サイドカーは以下の環境変数で動作を制御できます
 | `AWS_ACCESS_KEY_ID` | ✓ | - | アクセスキー (Secretから注入) |
 | `AWS_SECRET_ACCESS_KEY` | ✓ | - | シークレットキー (Secretから注入) |
 | `S3FS_OPTS` | | (空) | 追加のs3fsオプション |
-| `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | UDSソケットパス |
+| `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | Unix Domain Socket (UDS) のソケットパス |
+| `S3FS_NO_CHECK_CERT` | | `false` | `true`: TLS証明書検証を無効化（自己署名証明書環境用） / `false`: 検証有効 |
 
 ## s3fs オプションのカスタマイズ
 
@@ -131,8 +148,16 @@ s3fs-proxy サイドカーは以下の環境変数で動作を制御できます
 - `-o url=${S3FS_ENDPOINT}` - S3エンドポイント
 - `-o endpoint=${S3FS_REGION}` - リージョン
 - `-o use_path_request_style` - パススタイルリクエスト使用
-- `-o no_check_certificate` - SSL証明書検証スキップ
 - `-f` - フォアグラウンド実行
+
+**TLS 証明書検証**（デフォルト: 有効）:
+
+ConfigMap の `S3FS_NO_CHECK_CERT` で制御できます。
+
+| `S3FS_NO_CHECK_CERT` | 内容 |
+|---|---|
+| `false` (デフォルト) | TLS証明書検証有効 |
+| `true` | 証明書検証を無効化（MinIO等自己署名証明書環境用） |
 
 ## トラブルシューティング
 
@@ -175,7 +200,7 @@ kubectl logs -n mfcp-system -l app.kubernetes.io/name=meta-fuse-csi-plugin
 - s3fs は POSIX 互換ですが、通常のファイルシステムと完全に同一ではありません
 - パフォーマンスは S3 API のレイテンシに依存します
 - 大量の小さいファイルの操作は遅くなる可能性があります
-- 本番環境では SSL 証明書検証を有効化することを推奨します（`no_check_certificate` オプションを削除）
+- 本番環境では `S3FS_NO_CHECK_CERT: "false"` (デフォルト値) のまま利用し TLS 証明書検証を有効にしてください
 
 ## 参考資料
 

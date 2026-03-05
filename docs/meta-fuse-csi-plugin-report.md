@@ -27,14 +27,14 @@ FUSE（Filesystem in UserSpace）は Linux カーネルの機能で、ユーザ�
 graph LR
     subgraph Node["Kubernetes Node"]
         subgraph CSIPod["CSI Driver Pod (DaemonSet)"]
-            CSI["CAP_SYS_ADMIN あり<br/>/dev/fuse open(2)<br/>mount(2) 実行<br/>fd を UDS 経由で渡す"]
+            CSI["CAP_SYS_ADMIN あり<br/>/dev/fuse open(2)<br/>mount(2) 実行<br/>fd を Unix Domain Socket (UDS) 経由で渡す"]
         end
         subgraph UserPod["User Pod"]
             Sidecar["Sidecar<br/>(fuse-starter or<br/>fusermount3-proxy)"]
             App["App Container"]
             Sidecar -- "mountPropagation" --> App
         end
-        Sidecar -. "UDS<br/>(fd passing)" .-> CSI
+        Sidecar -. "Unix Domain Socket (UDS)<br/>(fd passing)" .-> CSI
     end
 
     style CSIPod fill:#f8cecc,stroke:#b85450
@@ -45,7 +45,7 @@ graph LR
 ```
 
 - **CSI Driver Pod**: クラスター管理者が DaemonSet として各ノードにデプロイ。特権操作（`/dev/fuse` の open・mount）を代行。`CAP_SYS_ADMIN` はこの Pod のみが保持
-- **User Pod**: ユーザーが任意の FUSE 実装を `CAP_SYS_ADMIN` なしで使用。Sidecar コンテナが UDS 経由で CSI Driver Pod と通信
+- **User Pod**: ユーザーが任意の FUSE 実装を `CAP_SYS_ADMIN` なしで使用。Sidecar コンテナが Unix Domain Socket (UDS) 経由で CSI Driver Pod と通信
 
 ---
 
@@ -154,7 +154,7 @@ meta-fuse-csi-plugin   1         1         1       1            1           kube
 1. NodePublishVolume が CSI ドライバーへ呼び出される
 2. CSI ドライバーが /dev/fuse を open(2) → fd を取得
 3. mount(2) を実行
-4. emptyDir の UDS 経由でサイドカーコンテナへ fd を送信
+4. emptyDir の Unix Domain Socket (UDS) 経由でサイドカーコンテナへ fd を送信
 5. fuse-starter が fd を受け取り、FUSE 実装を /dev/fd/3 として起動
 6. FUSE 実装がカーネルと通信
 ```
@@ -228,8 +228,8 @@ spec:
 **仕組み**:
 
 1. FUSE 実装が `fusermount3` の呼び出しに失敗すると、`fusermount3-proxy` が代わりに起動
-2. `fusermount3-proxy` は UDS 経由で CSI ドライバーと通信し、特権操作を委任
-3. CSI ドライバーから fd を受け取り、呼び出し元の FUSE 実装へ UDS 経由で渡す
+2. `fusermount3-proxy` は Unix Domain Socket (UDS) 経由で CSI ドライバーと通信し、特権操作を委任
+3. CSI ドライバーから fd を受け取り、呼び出し元の FUSE 実装へ Unix Domain Socket (UDS) 経由で渡す
 
 **Pod マニフェスト例（mountpoint-s3 / fusermount3-proxy）**:
 
@@ -257,7 +257,7 @@ spec:
             --endpoint-url http://localhost:9000 -d --allow-other
             --auto-unmount --foreground --force-path-style"
       env:
-        - name: FUSERMOUNT3PROXY_FDPASSING_SOCKPATH  # UDS パスを指定
+        - name: FUSERMOUNT3PROXY_FDPASSING_SOCKPATH  # Unix Domain Socket (UDS) のパスを指定
           value: "/fusermount3-proxy/fuse-csi-ephemeral.sock"
         - name: AWS_ACCESS_KEY_ID
           value: "minioadmin"
@@ -337,7 +337,7 @@ This is a test file for minio
 |------|-------------|-------------------|
 | **対象 FUSE ライブラリ** | libfuse3 / jacobsa/fuse | libfuse3 利用の任意実装 |
 | **対応実装** | mountpoint-s3, gcsfuse | mountpoint-s3, goofys, s3fs, ros3fs, sshfs |
-| **UDS 通信** | CSI Driver → fuse-starter | FUSE 実装 → fusermount3-proxy → CSI Driver |
+| **Unix Domain Socket (UDS) 通信** | CSI Driver → fuse-starter | FUSE 実装 → fusermount3-proxy → CSI Driver |
 | **設定の複雑さ** | やや低い | やや高い（環境変数の設定が必要） |
 | **Rust `fuser` クレート対応** | ❌ | ✅ |
 
@@ -347,16 +347,16 @@ This is a test file for minio
 
 ```mermaid
 graph TB
-    CSI["<b>CSI Driver Pod</b><br/>（クラスター管理者管理）<br/><br/>CAP_SYS_ADMIN あり<br/>/dev/fuse の open(2)<br/>mount(2) の実行<br/>fd を UDS 経由でのみ渡す"]
+    CSI["<b>CSI Driver Pod</b><br/>（クラスター管理者管理）<br/><br/>CAP_SYS_ADMIN あり<br/>/dev/fuse の open(2)<br/>mount(2) の実行<br/>fd を Unix Domain Socket (UDS) 経由でのみ渡す"]
     User["<b>User Pod</b><br/>（一般ユーザー管理）<br/><br/>CAP_SYS_ADMIN なし<br/>fd 受け取り後は通常権限で FUSE 処理<br/>任意の FUSE 実装を自由に選択"]
 
-    CSI <-. "UDS (SCM_RIGHTS)<br/>fd passing" .-> User
+    CSI <-. "Unix Domain Socket (UDS) (SCM_RIGHTS)<br/>fd passing" .-> User
 
     style CSI fill:#f8cecc,stroke:#b85450
     style User fill:#dae8fc,stroke:#6c8ebf
 ```
 
-`SCM_RIGHTS` メッセージを利用した UDS 経由の fd 受け渡しにより、特権操作はクラスター管理者管理の Pod に限定されます。
+`SCM_RIGHTS` メッセージを利用した Unix Domain Socket (UDS) 経由の fd 受け渡しにより、特権操作はクラスター管理者管理の Pod に限定されます。
 
 ---
 

@@ -83,13 +83,13 @@ sshfs/
   ├── Dockerfile
   ├── entrypoint.sh
   ├── deploy-kind.yaml
-  ├── deploy-registry.yaml
+  ├── deploy.yaml
   └── README.md
 s3fs/
   ├── Dockerfile
   ├── entrypoint.sh
   ├── deploy-kind.yaml
-  ├── deploy-registry.yaml
+  ├── deploy.yaml
   └── README.md
 ```
 
@@ -142,7 +142,7 @@ volumeAttributes:
   fdPassingSocketName: mfcp.sock
 ```
 
-UDS ソケットのパスを `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` 環境変数と一致させる必要があります。
+Unix Domain Socket (UDS) のソケットパスを `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` 環境変数と一致させる必要があります。
 
 ---
 
@@ -178,17 +178,40 @@ UDS ソケットのパスを `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` 環境変数�
 
 ---
 
+## 11. ConfigMap による環境固有値の外出し
+
+| | 調査レポート | 本実装 |
+|---|---|---|
+| **接続パラメータ** | Pod spec 内の `env` に直接記載 | **ConfigMap** (`sshfs-config` / `s3fs-config`) から `configMapKeyRef` で注入 |
+
+**変更理由**: 接続パラメータ（ホスト、ユーザー、バケット名等）を Pod マニフェストから分離し、環境ごとに異なる設定値を安全に管理するため。
+
+**実装内容**:
+
+- `configmap.example.yaml` をテンプレートとして各 FUSE ディレクトリに配置
+- 利用者はテンプレートをコピーして環境別の ConfigMap を作成（例: `configmap-kind.yaml`）
+- `configmap.example.yaml` 以外の `configmap*.yaml` は `.gitignore` で除外し、環境固有値がリポジトリにコミットされることを防止
+- `deploy-kind.yaml` / `deploy.yaml` の両方が同一の ConfigMap 名を参照するため、マニフェスト自体の編集は不要
+
+| FUSE 実装 | ConfigMap 名 | キー |
+|---|---|---|
+| sshfs | `sshfs-config` | `SSHFS_HOST`, `SSHFS_USER`, `SSHFS_REMOTE_PATH`, `SSHFS_PORT` |
+| s3fs | `s3fs-config` | `S3FS_BUCKET`, `S3FS_ENDPOINT`, `S3FS_REGION` |
+
+---
+
 ## 変更一覧
 
 | # | 変更項目 | 関連ファイル |
 |---|---|---|
-| 1 | K8s バージョン要件の引き上げ（v1.29+） | `sshfs/deploy-kind.yaml`, `sshfs/deploy-registry.yaml`, `s3fs/deploy-kind.yaml`, `s3fs/deploy-registry.yaml` |
-| 2 | Native sidecar 方式の採用 | `sshfs/deploy-kind.yaml`, `sshfs/deploy-registry.yaml`, `s3fs/deploy-kind.yaml`, `s3fs/deploy-registry.yaml` |
+| 1 | K8s バージョン要件の引き上げ（v1.29+） | `sshfs/deploy-kind.yaml`, `sshfs/deploy.yaml`, `s3fs/deploy-kind.yaml`, `s3fs/deploy.yaml` |
+| 2 | Native sidecar 方式の採用 | `sshfs/deploy-kind.yaml`, `sshfs/deploy.yaml`, `s3fs/deploy-kind.yaml`, `s3fs/deploy.yaml` |
 | 3 | fusermount3-proxy のみ採用 | `sshfs/Dockerfile`, `s3fs/Dockerfile`, `*/entrypoint.sh` |
 | 4 | CSI マニフェストの独自管理 | `csi/csi-driver.yaml`, `csi/csi-driver-daemonset.yaml` |
 | 5 | 対象を sshfs・s3fs に限定 | `sshfs/`, `s3fs/` |
 | 6 | 独自イメージビルド + CI/CD | `*/Dockerfile`, `.github/workflows/docker-image.yml` |
-| 7 | Secret による認証情報管理 | `*/deploy-kind.yaml`, `*/deploy-registry.yaml`, `*/entrypoint.sh` |
-| 8 | CSI ボリューム属性の明示化 | `*/deploy-kind.yaml`, `*/deploy-registry.yaml` |
-| 9 | セキュリティコンテキストの明示設定 | `*/deploy-kind.yaml`, `*/deploy-registry.yaml`, `csi/csi-driver-daemonset.yaml` |
-| 10 | 全コンテナへのリソース制限追加 | `*/deploy-kind.yaml`, `*/deploy-registry.yaml`, `csi/csi-driver-daemonset.yaml` |
+| 7 | Secret による認証情報管理 | `*/deploy-kind.yaml`, `*/deploy.yaml`, `*/entrypoint.sh` |
+| 8 | CSI ボリューム属性の明示化 | `*/deploy-kind.yaml`, `*/deploy.yaml` |
+| 9 | セキュリティコンテキストの明示設定 | `*/deploy-kind.yaml`, `*/deploy.yaml`, `csi/csi-driver-daemonset.yaml` |
+| 10 | 全コンテナへのリソース制限追加 | `*/deploy-kind.yaml`, `*/deploy.yaml`, `csi/csi-driver-daemonset.yaml` |
+| 11 | ConfigMap による環境固有値の外出し | `*/configmap.example.yaml`, `*/deploy-kind.yaml`, `*/deploy.yaml` |

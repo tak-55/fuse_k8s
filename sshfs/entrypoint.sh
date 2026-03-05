@@ -13,12 +13,15 @@
 # =============================================================================
 
 # 環境変数:
-#   SSHFS_HOST          - 接続先SSHホスト (デフォルト: localhost)
-#   SSHFS_USER          - SSHユーザー名  (デフォルト: root)
-#   SSHFS_REMOTE_PATH   - リモートパス   (デフォルト: /root/sshfs-example)
-#   SSHFS_MOUNT_POINT   - マウント先     (デフォルト: /tmp)
-#   SSHFS_PORT          - SSHポート      (デフォルト: 22)
-#   USE_LOCAL_SSHD      - "true" の場合コンテナ内 sshd を起動 (デフォルト: false)
+#   SSHFS_HOST                  - 接続先SSHホスト                    (デフォルト: localhost)
+#   SSHFS_USER                  - SSHユーザー名                      (デフォルト: root)
+#   SSHFS_REMOTE_PATH           - リモートパス                       (デフォルト: /root/sshfs-example)
+#   SSHFS_MOUNT_POINT           - マウント先                         (デフォルト: /tmp)
+#   SSHFS_PORT                  - SSHポート                          (デフォルト: 22)
+#   USE_LOCAL_SSHD              - "true" の場合コンテナ内 sshd を起動 (デフォルト: false)
+#   SSHFS_STRICT_HOST_KEY_CHECK - ホスト鍵の検証を有効化             (デフォルト: true)
+#                                 true : StrictHostKeyChecking=accept-new (初回のみ自動受け入れ)
+#                                 false: StrictHostKeyChecking=no (検証なし、テスト用途のみ)
 
 SSHFS_HOST="${SSHFS_HOST:-localhost}"
 SSHFS_USER="${SSHFS_USER:-root}"
@@ -26,6 +29,7 @@ SSHFS_REMOTE_PATH="${SSHFS_REMOTE_PATH:-/root/sshfs-example}"
 SSHFS_MOUNT_POINT="${SSHFS_MOUNT_POINT:-/tmp}"
 SSHFS_PORT="${SSHFS_PORT:-22}"
 USE_LOCAL_SSHD="${USE_LOCAL_SSHD:-false}"
+SSHFS_STRICT_HOST_KEY_CHECK="${SSHFS_STRICT_HOST_KEY_CHECK:-true}"
 
 # -----------------------------------------------------------------------
 # (オプション) ローカル SSHd の起動
@@ -59,16 +63,34 @@ if [ -n "$SSH_PRIVATE_KEY" ]; then
 fi
 
 # -----------------------------------------------------------------------
+# セキュリティオプション
+# SSHFS_STRICT_HOST_KEY_CHECK=true (デフォルト): accept-new でホスト鍵を検証
+# SSHFS_STRICT_HOST_KEY_CHECK=false: 検証なし (テスト・開発環境のみ)
+# -----------------------------------------------------------------------
+if [[ "${SSHFS_STRICT_HOST_KEY_CHECK}" == "false" ]]; then
+    echo "[WARN] SSHFS_STRICT_HOST_KEY_CHECK=false: ホスト鍵の検証を無効化します（本番環境では非推奨）"
+    STRICT_HOST_KEY_OPT="StrictHostKeyChecking=no"
+    KNOWN_HOSTS_OPT="UserKnownHostsFile=/dev/null"
+else
+    STRICT_HOST_KEY_OPT="StrictHostKeyChecking=accept-new"
+    KNOWN_HOSTS_OPT="UserKnownHostsFile=/root/.ssh/known_hosts"
+    mkdir -p /root/.ssh
+    touch /root/.ssh/known_hosts
+    chmod 600 /root/.ssh/known_hosts
+fi
+
+# -----------------------------------------------------------------------
 # sshfs をフォアグラウンドで起動 (-f)
 # -----------------------------------------------------------------------
 echo "[INFO] sshfs を起動します: ${SSHFS_USER}@${SSHFS_HOST}:${SSHFS_REMOTE_PATH} -> ${SSHFS_MOUNT_POINT}"
+echo "[INFO] HostKeyChecking: ${STRICT_HOST_KEY_OPT}"
 
 /usr/bin/sshfs \
     "${SSHFS_USER}@${SSHFS_HOST}:${SSHFS_REMOTE_PATH}" \
     "${SSHFS_MOUNT_POINT}" \
     -p "${SSHFS_PORT}" \
-    -o StrictHostKeyChecking=no \
-    -o UserKnownHostsFile=/dev/null \
+    -o "${STRICT_HOST_KEY_OPT}" \
+    -o "${KNOWN_HOSTS_OPT}" \
     -o IdentityFile=/secrets/ssh/private_key \
     -f \
     &

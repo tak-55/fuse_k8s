@@ -28,7 +28,7 @@ graph TB
         CSI["meta-fuse-csi-plugin<br/>(CAP_SYS_ADMIN)"]
     end
 
-    Sidecar -. "UDS" .-> CSI
+    Sidecar -. "Unix Domain Socket (UDS)" .-> CSI
 
     style Pod fill:#dae8fc,stroke:#6c8ebf
     style Sidecar fill:#fff2cc,stroke:#d6b656
@@ -41,7 +41,7 @@ graph TB
 
 1. **Sidecarコンテナ**がFUSEファイルシステム（sshfs、s3fs等）を起動
 2. `touch /dev/fuse`により、libfuseがfusermount3経由パスを使用
-3. **fusermount3-proxy**がfusermount3として動作し、UDSでCSI DaemonSetと通信
+3. **fusermount3-proxy**がfusermount3として動作し、Unix Domain Socket (UDS)でCSI DaemonSetと通信
 4. **CSI DaemonSet**が`CAP_SYS_ADMIN`権限でマウント操作を実行
 5. **アプリケーションコンテナ**が権限なしでマウントされたファイルシステムにアクセス
 
@@ -57,13 +57,15 @@ fuse_k8s/
 │   ├── Dockerfile                 # sshfs サイドカーイメージ
 │   ├── entrypoint.sh              # sshfs 起動スクリプト
 │   ├── deploy-kind.yaml           # kind 向けデプロイマニフェスト
-│   ├── deploy-registry.yaml       # レジストリ向けデプロイマニフェスト
+│   ├── deploy.yaml                # レジストリ向けデプロイマニフェスト
+│   ├── configmap.example.yaml     # ConfigMap テンプレート
 │   └── README.md                  # sshfs 詳細ドキュメント
 └── s3fs/                          # S3 互換ストレージ
     ├── Dockerfile                 # s3fs サイドカーイメージ
     ├── entrypoint.sh              # s3fs 起動スクリプト
     ├── deploy-kind.yaml           # kind 向けデプロイマニフェスト
-    ├── deploy-registry.yaml       # レジストリ向けデプロイマニフェスト
+    ├── deploy.yaml                # レジストリ向けデプロイマニフェスト
+    ├── configmap.example.yaml     # ConfigMap テンプレート
     └── README.md                  # s3fs 詳細ドキュメント
 ```
 
@@ -102,7 +104,7 @@ kubectl create secret docker-registry ghcr-secret \
   --docker-password=<YOUR_PAT>
 ```
 
-作成した Secret は、`deploy-registry.yaml` の `imagePullSecrets` に追加してください：
+作成した Secret は、`deploy.yaml` の `imagePullSecrets` に追加してください：
 
 ```yaml
 spec:
@@ -125,21 +127,45 @@ kubectl get ds -n mfcp-system
 kubectl get pods -n mfcp-system
 ```
 
-### 4. 使用するファイルシステムを選択
+### 4. ConfigMap の作成
+
+接続パラメータは ConfigMap で管理します。テンプレートからコピーして環境に合わせて編集してください。
+
+```bash
+# sshfs の場合
+cp sshfs/configmap.example.yaml sshfs/configmap-kind.yaml
+vi sshfs/configmap-kind.yaml    # 環境に合わせて編集
+kubectl apply -f sshfs/configmap-kind.yaml
+
+# s3fs の場合
+cp s3fs/configmap.example.yaml s3fs/configmap-kind.yaml
+vi s3fs/configmap-kind.yaml     # 環境に合わせて編集
+kubectl apply -f s3fs/configmap-kind.yaml
+```
+
+> **注意**: `configmap.example.yaml` 以外の `configmap*.yaml` は `.gitignore` で除外されています。環境固有の設定値を含むため、Git にコミットしないでください。
+
+### 5. 使用するファイルシステムを選択
 
 各ファイルシステムの詳細なセットアップ手順は、それぞれのREADMEを参照してください：
 
 #### SSH リモートファイルシステム (sshfs)
 ```bash
-cd sshfs/
-# 詳細は sshfs/README.md を参照
+# kind 環境（ローカルイメージ）
+kubectl apply -f sshfs/deploy-kind.yaml
+
+# レジストリイメージ
+kubectl apply -f sshfs/deploy.yaml
 ```
 [→ sshfs/README.md](./sshfs/README.md)
 
 #### S3 互換ストレージ (s3fs)
 ```bash
-cd s3fs/
-# 詳細は s3fs/README.md を参照
+# kind 環境（ローカルイメージ）
+kubectl apply -f s3fs/deploy-kind.yaml
+
+# レジストリイメージ
+kubectl apply -f s3fs/deploy.yaml
 ```
 [→ s3fs/README.md](./s3fs/README.md)
 
@@ -151,6 +177,7 @@ cd s3fs/
 | **認証方式** | SSH鍵ペア | アクセスキー/シークレットキー |
 | **対応ストレージ** | SSHサーバー | AWS S3, MinIO, Ceph等 |
 | **ユースケース** | 既存サーバーのファイル共有 | オブジェクトストレージのマウント |
+| **ConfigMap** | `sshfs-config` (接続情報) | `s3fs-config` (接続情報) |
 | **Secret** | `ssh-key` (秘密鍵) | `s3-credentials` (アクセスキー) |
 
 ## 開発・テスト
@@ -191,9 +218,18 @@ kind load docker-image s3fs-proxy:latest --name fuse-dev
 docker exec -it fuse-dev-control-plane crictl images | grep proxy
 ```
 
-#### デプロイ
+#### ConfigMap の作成とデプロイ
 
 ```bash
+# ConfigMap の作成（テンプレートからコピーして編集）
+cp sshfs/configmap.example.yaml sshfs/configmap-kind.yaml
+cp s3fs/configmap.example.yaml s3fs/configmap-kind.yaml
+# 各 configmap-kind.yaml を環境に合わせて編集
+
+# ConfigMap の適用
+kubectl apply -f sshfs/configmap-kind.yaml
+kubectl apply -f s3fs/configmap-kind.yaml
+
 # kind 向けマニフェストを使用
 kubectl apply -f sshfs/deploy-kind.yaml
 kubectl apply -f s3fs/deploy-kind.yaml
@@ -252,13 +288,18 @@ kubectl logs -n mfcp-system -l app.kubernetes.io/name=meta-fuse-csi-plugin
 
 ## セキュリティ考慮事項
 
-- **サイドカーコンテナは `privileged: true` で動作**: fusermount3-proxyがUDS通信を行うために必要
+- **セキュリティオプションはデフォルト有効**: ConfigMap で無効化可能
+  - sshfs: `SSHFS_STRICT_HOST_KEY_CHECK` — デフォルト `true`（`StrictHostKeyChecking=accept-new`）
+  - s3fs: `S3FS_NO_CHECK_CERT` — デフォルト `false`（TLS証明書検証有効）
+- **サイドカーコンテナは `privileged: true` で動作**: fusermount3-proxyがUnix Domain Socket (UDS)通信を行うために必要
 - **`runAsNonRoot: false` の明示的設定**: CSI DaemonSet（csi-driver、node-driver-registrar）、サイドカーコンテナ、アプリコンテナに設定。Pod Security Admission が有効な環境でコンテナの起動を保証するため
 - **アプリケーションコンテナは権限不要**: マウント済みファイルシステムへのアクセスのみ
+- **ConfigMap管理**: 接続パラメータ（ホスト、バケット名等）はKubernetes ConfigMapで管理
 - **Secret管理**: SSH鍵やS3認証情報はKubernetes Secretで管理
 - **本番環境での推奨事項**:
   - SSH鍵にはパスフレーズを設定
-  - S3ではSSL証明書検証を有効化
+  - `SSHFS_STRICT_HOST_KEY_CHECK: "true"`（デフォルト）のまま利用
+  - `S3FS_NO_CHECK_CERT: "false"`（デフォルト）のまま利用
   - 最小権限の原則に従ってIAMロールやSSH権限を設定
 
 ## 参考資料

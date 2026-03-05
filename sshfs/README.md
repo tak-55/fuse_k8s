@@ -9,7 +9,7 @@ meta-fuse-csi-pluginを使用して、SSHリモートファイルシステムを
   └─ touch /dev/fuse            (libfuse に fusermount3 経由を強制)
   └─ sshfs ... -f               (フォアグラウンド起動)
   └─ fusermount3-proxy          (fusermount3 として差し替え済み)
-       └─ UDS ─────────────────> [CSI DaemonSet (CAP_SYS_ADMIN)]
+       └─ Unix Domain Socket (UDS) ──────> [CSI DaemonSet (CAP_SYS_ADMIN)]
                                      └─ open("/dev/fuse") + mount()
 [app container]
   └─ /data (HostToContainer 伝播)
@@ -79,39 +79,55 @@ kubectl create secret generic ssh-key \
   --from-file=private_key=${HOME}/.ssh/sshfs_key
 ```
 
-### 3. デプロイマニフェストの編集
+### 3. ConfigMap の作成
 
-`deploy.yaml` の以下の環境変数を編集してください：
+接続パラメータは ConfigMap (`sshfs-config`) で管理します。テンプレートからコピーして環境に合わせて編集してください。
 
-| 環境変数 | 説明 | 例 |
+```bash
+# テンプレートからコピー
+cp configmap.example.yaml configmap-kind.yaml
+
+# 環境に合わせて編集
+vi configmap-kind.yaml
+
+# ConfigMap を適用
+kubectl apply -f configmap-kind.yaml
+```
+
+ConfigMap で設定する接続パラメータ：
+
+| キー | 説明 | 例 |
 |---------|------|-----|
-| `SSHFS_HOST` | SSH接続先ホスト | `192.168.72.27` |
-| `SSHFS_USER` | SSHユーザー名 | `demouser` |
-| `SSHFS_REMOTE_PATH` | リモートパス | `/home/demouser` |
+| `SSHFS_HOST` | SSH接続先ホスト | `ssh.example.com` |
+| `SSHFS_USER` | SSHユーザー名 | `your-user` |
+| `SSHFS_REMOTE_PATH` | リモートパス | `/home/your-user` |
 | `SSHFS_PORT` | SSHポート番号 | `22` |
+
+> **注意**: `configmap.example.yaml` 以外の `configmap*.yaml` は `.gitignore` で除外されています。環境固有の設定値を含むため、Git にコミットしないでください。
+
+デプロイマニフェスト (`deploy-kind.yaml` / `deploy.yaml`) は `configMapKeyRef` で ConfigMap から環境変数を参照するため、マニフェスト自体の編集は不要です。
 
 > **chroot 環境 (SFTP subsystem) を使用している場合の注意**
 >
 > SSH サーバー側で `ChrootDirectory` が設定されている場合（`/etc/ssh/sshd_config` の `Subsystem sftp internal-sftp` と組み合わせた構成など）、クライアントから見えるルート (`/`) はサーバー側の chroot ディレクトリになります。
 >
-> 例: サーバーの `ChrootDirectory` が `/srv/data/demouser` の場合
+> 例: サーバーの `ChrootDirectory` が `/srv/chroot/your-user` の場合
 >
 > | 実際のサーバー上のパス | `SSHFS_REMOTE_PATH` に指定する値 |
 > |----------------------|--------------------------------|
-> | `/srv/data/demouser/files` | `/files` |
-> | `/srv/data/demouser` (ルート直下) | `/` |
+> | `/srv/chroot/your-user/files` | `/files` |
+> | `/srv/chroot/your-user` (ルート直下) | `/` |
 >
 > chroot 環境では絶対パスがリセットされるため、**chroot ディレクトリからの相対パス** を指定してください。
 
 ### 4. デプロイ
 
 ```bash
-# kind 環境の場合
+# kind 環境の場合（ローカルイメージ）
 kubectl apply -f deploy-kind.yaml
 
 # レジストリからイメージをプルする場合
-# deploy-registry.yaml の image を自環境のレジストリに書き換えてください
-kubectl apply -f deploy-registry.yaml
+kubectl apply -f deploy.yaml
 ```
 
 ### 5. 動作確認
@@ -140,18 +156,24 @@ sshfs-proxy サイドカーは以下の環境変数で動作を制御できま�
 | `SSHFS_MOUNT_POINT` | | `/tmp` | マウント先パス |
 | `USE_LOCAL_SSHD` | | `false` | `true`でコンテナ内sshdを起動 (デモ用) |
 | `SSH_PRIVATE_KEY` | | - | SSH秘密鍵 (環境変数経由で注入する場合) |
-| `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | UDSソケットパス |
+| `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | Unix Domain Socket (UDS) のソケットパス |
+| `SSHFS_STRICT_HOST_KEY_CHECK` | | `true` | `true`: 初回のみ自動受入れ (accept-new) / `false`: 検証無効（テスト用） |
 
 ## sshfs オプションのカスタマイズ
 
 デフォルトで設定されているsshfsオプション：
 - `-p ${SSHFS_PORT}` - SSHポート指定
-- `-o StrictHostKeyChecking=no` - ホストキー検証スキップ
-- `-o UserKnownHostsFile=/dev/null` - known_hostsファイル使用しない
 - `-o IdentityFile=/secrets/ssh/private_key` - 秘密鍵ファイルパス
 - `-f` - フォアグラウンド実行
 
-entrypoint.sh を編集することで追加のオプションを指定できます。
+**ホスト鍵検証**（デフォルト: 有効）:
+
+ConfigMap の `SSHFS_STRICT_HOST_KEY_CHECK` で制御できます。
+
+| `SSHFS_STRICT_HOST_KEY_CHECK` | 内容 |
+|---|---|
+| `true` (デフォルト) | `StrictHostKeyChecking=accept-new` / `UserKnownHostsFile=/root/.ssh/known_hosts` |
+| `false` | `StrictHostKeyChecking=no` / `UserKnownHostsFile=/dev/null`（テスト・開発環境のみ） |
 
 ## トラブルシューティング
 
@@ -204,7 +226,7 @@ kubectl logs -n mfcp-system -l app.kubernetes.io/name=meta-fuse-csi-plugin
 - sshfs は POSIX 互換ですが、通常のファイルシステムと完全に同一ではありません
 - パフォーマンスはネットワークレイテンシに依存します
 - 大量の小さいファイルの操作は遅くなる可能性があります
-- 本番環境ではSSH鍵のパスフレーズ設定とホストキー検証を有効化することを推奨します
+- 本番環境では `SSHFS_STRICT_HOST_KEY_CHECK: "true"` (デフォルト値) のみまま利用しホスト鍵検証を有効にしてください
 
 ## 参考資料
 

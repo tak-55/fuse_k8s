@@ -17,7 +17,7 @@ graph LR
             App["App Container"]
             Sidecar -- "mountPropagation" --> App
         end
-        Sidecar -. "UDS<br/>(fd passing)" .-> CSI
+        Sidecar -. "Unix Domain Socket (UDS)<br/>(fd passing)" .-> CSI
     end
 
     style CSIPod fill:#f8cecc,stroke:#b85450
@@ -116,8 +116,6 @@ CSI ドライバーコンテナに加え `node-driver-registrar` (v2.10.0) を�
 | app コンテナ | `runAsNonRoot: false` |
 
 Pod Security Admission が有効な環境で、コンテナイメージのデフォルト設定に依存せずコンテナの起動を保証するための措置です。
-
----
 
 ## Docker イメージのビルド・配布
 
@@ -226,7 +224,7 @@ kind load docker-image s3fs-proxy:latest --name fuse-dev
 **レジストリ利用の場合:**
 
 GitHub Actions により main ブランチへの push 時に ghcr.io へ自動ビルド・プッシュされます。
-各 `deploy-registry.yaml` の `image` を自環境のレジストリに書き換えてください。
+各 `deploy.yaml` の `image` を自環境のレジストリに書き換えてください。
 
 # 利用方法
 
@@ -246,25 +244,33 @@ kubectl create secret generic ssh-key \
   --from-file=private_key=${HOME}/.ssh/sshfs_key
 ```
 
-### マニフェストの編集
+### ConfigMap の作成
 
-kind 環境では `sshfs/deploy-kind.yaml`、レジストリ利用時は `sshfs/deploy-registry.yaml` を使用します。
+`sshfs/configmap.example.yaml` をコピーして環境別の ConfigMap を作成します。
 
-| 環境変数 | 説明 | 例 |
+```bash
+cp sshfs/configmap.example.yaml sshfs/configmap-kind.yaml
+# 環境に合わせて値を編集
+```
+
+| ConfigMap キー | 説明 | 例 |
 |---------|------|-----|
-| `SSHFS_HOST` | SSH 接続先ホスト | `192.168.72.27` |
-| `SSHFS_USER` | SSH ユーザー名 | `demouser` |
-| `SSHFS_REMOTE_PATH` | リモートパス | `/home/demouser` |
+| `SSHFS_HOST` | SSH 接続先ホスト | `ssh.example.com` |
+| `SSHFS_USER` | SSH ユーザー名 | `your-user` |
+| `SSHFS_REMOTE_PATH` | リモートパス | `/home/your-user` |
 | `SSHFS_PORT` | SSH ポート番号 | `22` |
 
 ### デプロイと動作確認
 
 ```bash
+# ConfigMap を適用
+kubectl apply -f sshfs/configmap-kind.yaml
+
 # デプロイ（kind 環境）
 kubectl apply -f sshfs/deploy-kind.yaml
 
 # デプロイ（レジストリ利用）
-kubectl apply -f sshfs/deploy-registry.yaml
+kubectl apply -f sshfs/deploy.yaml
 
 # 動作確認
 kubectl get pod sshfs-example
@@ -282,11 +288,16 @@ kubectl create secret generic s3-credentials \
   --from-literal=secret_key=YOUR_SECRET_KEY
 ```
 
-### マニフェストの編集
+### ConfigMap の作成
 
-kind 環境では `s3fs/deploy-kind.yaml`、レジストリ利用時は `s3fs/deploy-registry.yaml` を使用します。
+`s3fs/configmap.example.yaml` をコピーして環境別の ConfigMap を作成します。
 
-| 環境変数 | 説明 | 例 |
+```bash
+cp s3fs/configmap.example.yaml s3fs/configmap-kind.yaml
+# 環境に合わせて値を編集
+```
+
+| ConfigMap キー | 説明 | 例 |
 |---------|------|-----|
 | `S3FS_BUCKET` | S3 バケット名 | `my-bucket` |
 | `S3FS_ENDPOINT` | S3 エンドポイント URL | `http://minio.default:9000` |
@@ -295,11 +306,14 @@ kind 環境では `s3fs/deploy-kind.yaml`、レジストリ利用時は `s3fs/de
 ### デプロイと動作確認
 
 ```bash
+# ConfigMap を適用
+kubectl apply -f s3fs/configmap-kind.yaml
+
 # デプロイ（kind 環境）
 kubectl apply -f s3fs/deploy-kind.yaml
 
 # デプロイ（レジストリ利用）
-kubectl apply -f s3fs/deploy-registry.yaml
+kubectl apply -f s3fs/deploy.yaml
 
 # 動作確認
 kubectl get pod s3fs-example

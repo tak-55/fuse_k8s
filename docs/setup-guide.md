@@ -93,7 +93,7 @@ kind load docker-image s3fs-proxy:latest --name fuse-dev
 **レジストリ利用の場合:**
 
 GitHub Actions により main ブランチへの push 時に ghcr.io へ自動ビルド・プッシュされます。
-各 `deploy-registry.yaml` の `image` を自環境のレジストリに書き換えてください。
+各 `deploy.yaml` の `image` を自環境のレジストリに書き換えてください。
 
 ---
 
@@ -115,15 +115,23 @@ kubectl create secret generic ssh-key \
   --from-file=private_key=${HOME}/.ssh/sshfs_key
 ```
 
-#### 3.1.2 マニフェストの編集
+#### 3.1.2 ConfigMap の作成
 
-マニフェストの環境変数を編集します。kind 環境では `sshfs/deploy-kind.yaml`、レジストリ利用時は `sshfs/deploy-registry.yaml` を使用してください。
+接続パラメータは ConfigMap で管理します。テンプレートからコピーして環境に合わせて編集してください。
 
-| 環境変数 | 説明 | 例 |
+```bash
+cp sshfs/configmap.example.yaml sshfs/configmap-kind.yaml
+vi sshfs/configmap-kind.yaml    # 環境に合わせて編集
+kubectl apply -f sshfs/configmap-kind.yaml
+```
+
+ConfigMap で設定するパラメータ：
+
+| キー | 説明 | 例 |
 |---------|------|-----|
-| `SSHFS_HOST` | SSH 接続先ホスト | `192.168.72.27` |
-| `SSHFS_USER` | SSH ユーザー名 | `demouser` |
-| `SSHFS_REMOTE_PATH` | リモートパス | `/home/demouser` |
+| `SSHFS_HOST` | SSH 接続先ホスト | `ssh.example.com` |
+| `SSHFS_USER` | SSH ユーザー名 | `your-user` |
+| `SSHFS_REMOTE_PATH` | リモートパス | `/home/your-user` |
 | `SSHFS_PORT` | SSH ポート番号 | `22` |
 
 #### 3.1.3 デプロイと動作確認
@@ -133,7 +141,7 @@ kubectl create secret generic ssh-key \
 kubectl apply -f sshfs/deploy-kind.yaml
 
 # デプロイ（レジストリ利用）
-kubectl apply -f sshfs/deploy-registry.yaml
+kubectl apply -f sshfs/deploy.yaml
 
 # Pod の起動確認
 kubectl get pod sshfs-example
@@ -157,11 +165,19 @@ kubectl create secret generic s3-credentials \
   --from-literal=secret_key=YOUR_SECRET_KEY
 ```
 
-#### 3.2.2 マニフェストの編集
+#### 3.2.2 ConfigMap の作成
 
-マニフェストの環境変数を編集します。kind 環境では `s3fs/deploy-kind.yaml`、レジストリ利用時は `s3fs/deploy-registry.yaml` を使用してください。
+接続パラメータは ConfigMap で管理します。テンプレートからコピーして環境に合わせて編集してください。
 
-| 環境変数 | 説明 | 例 |
+```bash
+cp s3fs/configmap.example.yaml s3fs/configmap-kind.yaml
+vi s3fs/configmap-kind.yaml     # 環境に合わせて編集
+kubectl apply -f s3fs/configmap-kind.yaml
+```
+
+ConfigMap で設定するパラメータ：
+
+| キー | 説明 | 例 |
 |---------|------|-----|
 | `S3FS_BUCKET` | S3 バケット名 | `my-bucket` |
 | `S3FS_ENDPOINT` | S3 エンドポイント URL | `http://minio.default:9000` |
@@ -174,7 +190,7 @@ kubectl create secret generic s3-credentials \
 kubectl apply -f s3fs/deploy-kind.yaml
 
 # デプロイ（レジストリ利用）
-kubectl apply -f s3fs/deploy-registry.yaml
+kubectl apply -f s3fs/deploy.yaml
 
 # Pod の起動確認
 kubectl get pod s3fs-example
@@ -190,28 +206,32 @@ kubectl exec s3fs-example -c app -- ls -la /data
 
 ## 補足: 環境変数リファレンス
 
+> **注記**: `SSHFS_HOST`, `SSHFS_USER`, `SSHFS_REMOTE_PATH`, `SSHFS_PORT` および `S3FS_BUCKET`, `S3FS_ENDPOINT`, `S3FS_REGION` は ConfigMap (`sshfs-config` / `s3fs-config`) から `configMapKeyRef` で注入されます。
+
 ### sshfs サイドカー
 
-| 変数名 | 必須 | デフォルト | 説明 |
-|--------|------|-----------|------|
-| `SSHFS_HOST` | ✓ | `localhost` | SSH 接続先ホスト |
-| `SSHFS_USER` | ✓ | `root` | SSH ユーザー名 |
-| `SSHFS_REMOTE_PATH` | | `/root/sshfs-example` | リモートマウントパス |
-| `SSHFS_PORT` | | `22` | SSH ポート番号 |
-| `SSHFS_MOUNT_POINT` | | `/tmp` | マウント先パス |
-| `USE_LOCAL_SSHD` | | `false` | `true` でコンテナ内 sshd を起動 |
-| `SSH_PRIVATE_KEY` | | - | SSH 秘密鍵（環境変数経由で注入する場合） |
-| `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | UDS ソケットパス |
+| 変数名 | 必須 | デフォルト | 注入元 | 説明 |
+|--------|------|-----------|--------|------|
+| `SSHFS_HOST` | ✓ | `localhost` | ConfigMap | SSH 接続先ホスト |
+| `SSHFS_USER` | ✓ | `root` | ConfigMap | SSH ユーザー名 |
+| `SSHFS_REMOTE_PATH` | | `/root/sshfs-example` | ConfigMap | リモートマウントパス |
+| `SSHFS_PORT` | | `22` | ConfigMap | SSH ポート番号 |
+| `SSHFS_MOUNT_POINT` | | `/tmp` | マニフェスト | マウント先パス |
+| `USE_LOCAL_SSHD` | | `false` | マニフェスト | `true` でコンテナ内 sshd を起動 |
+| `SSH_PRIVATE_KEY` | | - | Secret | SSH 秘密鍵（環境変数経由で注入する場合） |
+| `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | マニフェスト | Unix Domain Socket (UDS) のソケットパス |
+| `SSHFS_STRICT_HOST_KEY_CHECK` | | `true` | ConfigMap | `true`: 初回のみ自動受入れ (accept-new) / `false`: 検証無効（テスト用） |
 
 ### s3fs サイドカー
 
-| 変数名 | 必須 | デフォルト | 説明 |
-|--------|------|-----------|------|
-| `S3FS_BUCKET` | ✓ | - | S3 バケット名 |
-| `S3FS_ENDPOINT` | ✓ | - | S3 エンドポイント URL |
-| `S3FS_REGION` | | `us-east-1` | S3 リージョン |
-| `S3FS_MOUNT_POINT` | | `/mnt/s3fs` | マウント先パス |
-| `AWS_ACCESS_KEY_ID` | ✓ | - | アクセスキー（Secret から注入） |
-| `AWS_SECRET_ACCESS_KEY` | ✓ | - | シークレットキー（Secret から注入） |
-| `S3FS_OPTS` | | (空) | 追加の s3fs オプション |
-| `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | UDS ソケットパス |
+| 変数名 | 必須 | デフォルト | 注入元 | 説明 |
+|--------|------|-----------|--------|------|
+| `S3FS_BUCKET` | ✓ | - | ConfigMap | S3 バケット名 |
+| `S3FS_ENDPOINT` | ✓ | - | ConfigMap | S3 エンドポイント URL |
+| `S3FS_REGION` | | `us-east-1` | ConfigMap | S3 リージョン |
+| `S3FS_MOUNT_POINT` | | `/mnt/s3fs` | マニフェスト | マウント先パス |
+| `AWS_ACCESS_KEY_ID` | ✓ | - | Secret | アクセスキー（Secret から注入） |
+| `AWS_SECRET_ACCESS_KEY` | ✓ | - | Secret | シークレットキー（Secret から注入） |
+| `S3FS_OPTS` | | (空) | マニフェスト | 追加の s3fs オプション |
+| `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | マニフェスト | Unix Domain Socket (UDS) のソケットパス |
+| `S3FS_NO_CHECK_CERT` | | `false` | ConfigMap | `true`: TLS証明書検証を無効化（自己署名証明書環境用） / `false`: 検証有効 |

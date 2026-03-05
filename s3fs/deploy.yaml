@@ -1,12 +1,12 @@
 # =============================================================================
-# meta-fuse-csi-plugin + s3fs: 汎用デプロイマニフェスト
+# meta-fuse-csi-plugin + s3fs: デプロイマニフェスト（レジストリイメージ版）
 #
 # 使い方:
-#   1. S3認証情報Secretを作成:
+#   1. configmap.example.yaml をコピーして環境別 ConfigMap を作成・適用
+#   2. S3認証情報Secretを作成:
 #      kubectl create secret generic s3-credentials \
 #        --from-literal=access_key=YOUR_ACCESS_KEY \
 #        --from-literal=secret_key=YOUR_SECRET_KEY
-#   2. Pod spec 内の env で S3接続パラメータを編集
 #   3. kubectl apply -f deploy.yaml
 #
 # アーキテクチャ:
@@ -45,15 +45,22 @@ spec:
         runAsNonRoot: false
       restartPolicy: Always   # サイドカーとして動作 (v1.29+)
       env:
-        # S3バケット名 (必須)
+        # S3 接続情報 (ConfigMap から注入)
         - name: S3FS_BUCKET
-          value: "fuse-s3fs"
-        # S3エンドポイントURL (必須)
+          valueFrom:
+            configMapKeyRef:
+              name: s3fs-config
+              key: S3FS_BUCKET
         - name: S3FS_ENDPOINT
-          value: "http://192.168.72.27:9000"
-        # リージョン (デフォルト: us-east-1)
+          valueFrom:
+            configMapKeyRef:
+              name: s3fs-config
+              key: S3FS_ENDPOINT
         - name: S3FS_REGION
-          value: "us-east-1"
+          valueFrom:
+            configMapKeyRef:
+              name: s3fs-config
+              key: S3FS_REGION
         # S3認証情報 (Secretから注入)
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
