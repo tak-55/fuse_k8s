@@ -26,6 +26,7 @@ graph LR
     style Sidecar fill:#fff2cc,stroke:#d6b656
     style App fill:#d5e8d4,stroke:#82b366
 ```
+---
 
 ## セキュリティモデル
 
@@ -41,6 +42,8 @@ graph TB
 ```
 
 `SCM_RIGHTS`メッセージを利用した UNIX Domain Socket 経由の fd 受け渡しにより、特権操作はクラスター管理者管理の Pod に限定されます。
+
+---
 
 # meta-fuse-csi-plugin が提供する2つの方法
 
@@ -63,6 +66,8 @@ meta-fuse-csi-plugin では、以下の2つのマウント方法を提供して�
 | [ros3fs](https://github.com/MoSafi2/ros3fs) | fusermount3-proxy | ✅ |
 | [gcsfuse](https://github.com/GoogleCloudPlatform/gcsfuse) | fuse-starter | ❌（GCS 必要） |
 | [sshfs](https://github.com/libfuse/sshfs) | fusermount3-proxy | ✅ |
+
+---
 
 # 本実装での変更点
 
@@ -117,6 +122,8 @@ CSI ドライバーコンテナに加え `node-driver-registrar` (v2.10.0) を�
 
 Pod Security Admission が有効な環境で、コンテナイメージのデフォルト設定に依存せずコンテナの起動を保証するための措置です。
 
+---
+
 ## Docker イメージのビルド・配布
 
 | | オリジナル | 本実装 |
@@ -137,6 +144,7 @@ Pod Security Admission が有効な環境で、コンテナイメージのデフ
 | sshfs | `ssh-key` | `private_key` | `secretKeyRef` → 環境変数 → entrypoint.sh でファイル出力 |
 | s3fs | `s3-credentials` | `access_key`, `secret_key` | `secretKeyRef` → 環境変数 → entrypoint.sh で passwd-s3fs 生成 |
 
+
 ## CSI ボリューム属性の明示化
 
 オリジナルでは `fdPassingEmptyDirName` のみですが、本実装では4つの属性を明示的に設定しています。
@@ -149,6 +157,8 @@ volumeAttributes:
   fdPassingSocketName: mfcp.sock
 ```
 
+---
+
 ## リソース制限の追加
 
 全コンテナに requests/limits を設定しています。
@@ -159,6 +169,8 @@ volumeAttributes:
 | app | 10m | 100m | 32Mi | 128Mi |
 | csi-driver | 50m | 200m | 64Mi | 256Mi |
 | node-driver-registrar | 10m | 50m | 20Mi | 100Mi |
+
+---
 
 # 環境設定
 
@@ -185,9 +197,11 @@ kind create cluster --name fuse-dev
 kubectl cluster-info --context kind-fuse-dev
 ```
 
+---
+
 # インストール方法
 
-## ステップ 1: CSI ドライバーのデプロイ
+## CSI ドライバーのデプロイ
 
 すべての FUSE 実装で共通です（クラスターにつき1回のみ）。
 
@@ -196,7 +210,7 @@ kubectl apply -f csi/csi-driver.yaml
 kubectl apply -f csi/csi-driver-daemonset.yaml
 ```
 
-## ステップ 2: デプロイの確認
+## デプロイの確認
 
 ```bash
 kubectl get ds -n mfcp-system
@@ -210,7 +224,7 @@ NAME                   DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE
 meta-fuse-csi-plugin   1         1         1       1            1           kubernetes.io/os=linux   1m
 ```
 
-## ステップ 3: サイドカーイメージの準備
+## サイドカーイメージの準備
 
 **kind 環境の場合:**
 
@@ -225,6 +239,8 @@ kind load docker-image s3fs-proxy:latest --name fuse-dev
 
 GitHub Actions により main ブランチへの push 時に ghcr.io へ自動ビルド・プッシュされます。
 各 `deploy.yaml` の `image` を自環境のレジストリに書き換えてください。
+
+---
 
 # 利用方法
 
@@ -259,6 +275,8 @@ cp sshfs/configmap.example.yaml sshfs/configmap.yaml
 | `SSHFS_USER` | SSH ユーザー名 | `your-user` |
 | `SSHFS_REMOTE_PATH` | リモートパス | `/home/your-user` |
 | `SSHFS_PORT` | SSH ポート番号 | `22` |
+
+---
 
 ### デプロイと動作確認
 
@@ -321,6 +339,8 @@ kubectl exec s3fs-example -c app -- mount | grep fuse.s3fs
 kubectl exec s3fs-example -c app -- ls -la /data
 ```
 
+---
+
 # 付録: 環境変数リファレンス
 
 ## sshfs
@@ -348,6 +368,8 @@ kubectl exec s3fs-example -c app -- ls -la /data
 | `AWS_SECRET_ACCESS_KEY` | ✓ | - | シークレットキー（Secret から注入） |
 | `S3FS_OPTS` | | (空) | 追加の s3fs オプション |
 | `FUSERMOUNT3PROXY_FDPASSING_SOCKPATH` | ✓ | `/var/lib/mfcp/uds/mfcp.sock` | UNIX Domain Socket |
+
+---
 
 # 参考資料
 
