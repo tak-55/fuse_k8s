@@ -29,6 +29,21 @@ func (d *Driver) MountSshfs(targetPath string, params map[string]string, secrets
 	user := params["user"]
 	remotePath := params["remotePath"]
 	port := params["port"]
+
+	// 必須パラメータのバリデーション
+	if host == "" {
+		return fmt.Errorf("volumeAttributes.host が未設定です")
+	}
+	if user == "" {
+		return fmt.Errorf("volumeAttributes.user が未設定です")
+	}
+	if remotePath == "" {
+		return fmt.Errorf("volumeAttributes.remotePath が未設定です")
+	}
+	if secrets["private_key"] == "" {
+		return fmt.Errorf("nodePublishSecretRef の private_key が空です")
+	}
+
 	if port == "" {
 		port = "22"
 	}

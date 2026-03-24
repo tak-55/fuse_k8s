@@ -1,14 +1,19 @@
 # =============================================================================
-# fuse-csi-driver: ServiceAccount + DaemonSet（kind ローカルイメージ版）
+# fuse-csi-driver: ServiceAccount + DaemonSet（本番環境版）
 #
-# ローカル kind 環境用。本番環境は fuse-csi-driver-daemonset-prod.yaml を使用。
+# ghcr.io のイメージを使用。main ブランチへの push で自動ビルドされる。
 #
 # 使い方:
-#   docker build -t fuse-csi-driver:latest ./fuse-csi-driver/
-#   kind load docker-image fuse-csi-driver:latest --name <cluster-name>
 #   kubectl apply -f csi/fuse-csi-driver.yaml
-#   kubectl apply -f csi/fuse-csi-driver-daemonset.yaml
+#   kubectl apply -f csi/fuse-csi-driver-daemonset-prod.yaml
 #   kubectl get pods -n fuse-csi-system
+#
+# プライベートリポジトリの場合は imagePullSecrets を設定:
+#   kubectl create secret docker-registry ghcr-secret \
+#     --docker-server=ghcr.io \
+#     --docker-username=<GITHUB_USERNAME> \
+#     --docker-password=<PAT> \
+#     -n fuse-csi-system
 #
 # resource limits の根拠（50ユーザー並列対応）:
 #   ベース driver プロセス: ~100m CPU / 128Mi
@@ -55,6 +60,9 @@ spec:
         - key: node-role.kubernetes.io/control-plane
           operator: Exists
           effect: NoSchedule
+      # プライベートリポジトリを使用する場合はコメントを外す
+      # imagePullSecrets:
+      #   - name: ghcr-secret
       containers:
         # -----------------------------------------------------------------------
         # fuse-csi-driver: sshfs/s3fs を起動し NodePublishVolume を処理する
@@ -62,14 +70,12 @@ spec:
         # ユーザー namespace には一切 privileged が不要になる
         # -----------------------------------------------------------------------
         - name: fuse-csi-driver
-          # kind 環境: fuse-csi-driver:latest (kind load docker-image でロード)
-          # 本番:      ghcr.io/scaleworx-inc/fuse_k8s-fuse-csi-driver:latest
-          image: fuse-csi-driver:latest
-          imagePullPolicy: Never
+          image: ghcr.io/scaleworx-inc/fuse_k8s-fuse-csi-driver:latest
+          imagePullPolicy: Always
           args:
             - --endpoint=unix:/csi/csi.sock
             - --nodeid=$(NODE_ID)
-            - --v=4
+            - --v=2
           env:
             - name: NODE_ID
               valueFrom:
@@ -100,6 +106,7 @@ spec:
 
         # -----------------------------------------------------------------------
         # node-driver-registrar: CSI ソケットを kubelet に登録する
+        # csi-node-driver-registrar v2.10.0 は CSI spec v1.9.0 と互換
         # -----------------------------------------------------------------------
         - name: node-driver-registrar
           image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.0
