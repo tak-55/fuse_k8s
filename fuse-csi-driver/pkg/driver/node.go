@@ -68,9 +68,13 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublish
 
 	klog.Infof("NodeUnpublishVolume: targetPath=%s", targetPath)
 
-	// アンマウント（既にアンマウント済みでもエラーにしない）
+	// アンマウント: fusermount3 を試み、失敗したら umount にフォールバック
+	// （既にアンマウント済みでもエラーにしない）
 	if out, err := exec.Command("fusermount3", "-u", targetPath).CombinedOutput(); err != nil {
-		klog.Warningf("fusermount3 失敗（既にアンマウント済みの可能性）: %s: %v", out, err)
+		klog.Warningf("fusermount3 失敗、umount にフォールバック: %s: %v", out, err)
+		if out2, err2 := exec.Command("umount", targetPath).CombinedOutput(); err2 != nil {
+			klog.Warningf("umount も失敗（既にアンマウント済みの可能性）: %s: %v", out2, err2)
+		}
 	}
 
 	// プロセスと一時認証情報ファイルをクリーンアップ

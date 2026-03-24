@@ -26,6 +26,21 @@ func (d *Driver) MountS3fs(targetPath string, params map[string]string, secrets 
 	bucket := params["bucket"]
 	endpoint := params["endpoint"]
 	region := params["region"]
+
+	// 必須パラメータのバリデーション
+	if bucket == "" {
+		return fmt.Errorf("volumeAttributes.bucket が未設定です")
+	}
+	if endpoint == "" {
+		return fmt.Errorf("volumeAttributes.endpoint が未設定です（例: http://minio:9000）")
+	}
+	if secrets["access_key"] == "" {
+		return fmt.Errorf("nodePublishSecretRef の access_key が空です")
+	}
+	if secrets["secret_key"] == "" {
+		return fmt.Errorf("nodePublishSecretRef の secret_key が空です")
+	}
+
 	if region == "" {
 		region = "us-east-1"
 	}
