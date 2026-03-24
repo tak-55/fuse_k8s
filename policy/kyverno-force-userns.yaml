@@ -1,0 +1,42 @@
+# =============================================================================
+# Kyverno ClusterPolicy: hostUsers: false 強制
+#
+# Capsule テナントに属する全 Pod に spec.hostUsers: false を自動設定する。
+# → コンテナ内 UID がホスト UID 空間から分離され、コンテナ UID 0 は
+#   ホスト上の非 root UID (65536+) にマッピングされる。
+#   これによりコンテナ脱出時の特権昇格リスクを大幅に低減できる。
+#
+# 前提:
+#   helm install kyverno kyverno/kyverno -n kyverno --create-namespace
+#
+# 動作確認:
+#   kubectl get pod <name> -n <tenant-ns> -o yaml | grep hostUsers
+#   # 期待: hostUsers: false
+# =============================================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: force-userns-for-tenant
+  annotations:
+    policies.kyverno.io/title: Force User Namespaces for Tenant Pods
+    policies.kyverno.io/description: >
+      Capsule テナントの namespace に属する Pod に hostUsers: false を自動設定する。
+      コンテナ UID とホスト UID を分離し、特権昇格を防止する。
+spec:
+  rules:
+  - name: mutate-host-users
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+          namespaceSelector:
+            matchExpressions:
+            - key: capsule.clastix.io/tenant
+              operator: Exists
+    mutate:
+      patchStrategicMerge:
+        spec:
+          # hostUsers: false により Pod 内の全コンテナが user namespace で動作する
+          # コンテナ UID 0 → ホスト UID 65536+ にマッピング
+          hostUsers: false

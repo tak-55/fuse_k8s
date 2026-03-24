@@ -1,0 +1,29 @@
+# =============================================================================
+# Capsule Tenant サンプル
+#
+# 本番環境では tenant name / owner を実際の値に変更すること。
+# このテナントに属する namespace には PSA ラベルが自動付与される:
+#   pod-security.kubernetes.io/enforce: restricted
+#   → privileged: true / CAP_SYS_ADMIN を含む Pod は作成不可
+#
+# 前提:
+#   helm install capsule capsule-helm-chart/capsule -n capsule-system --create-namespace
+# =============================================================================
+apiVersion: capsule.clastix.io/v1beta2
+kind: Tenant
+metadata:
+  name: example-tenant
+spec:
+  owners:
+    - kind: User
+      name: example-user
+  namespaceOptions:
+    additionalMetadata:
+      labels:
+        # PSS restricted: privileged: true を含む Pod はすべて拒否
+        # ユーザーが持ち込む Pod に特権コンテナを禁止するための設定
+        pod-security.kubernetes.io/enforce: restricted
+        pod-security.kubernetes.io/audit: baseline
+        pod-security.kubernetes.io/warn: baseline
+        # Kyverno ポリシーのマッチングに使用するラベル
+        capsule.clastix.io/tenant: example-tenant
