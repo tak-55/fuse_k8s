@@ -99,10 +99,16 @@ func (d *Driver) MountSshfs(targetPath string, params map[string]string, secrets
 	}
 	d.mu.Unlock()
 
-	// プロセス終了を非同期で監視（ログ出力）
+	// プロセス終了を非同期で監視
+	// クラッシュ時は d.mounts からエントリを削除する。
+	// これにより次の NodePublishVolume が冪等性チェックで誤判定せず、
+	// 再マウントを正常に試みられる。
 	go func() {
 		cmd.Wait()
 		klog.Warningf("sshfs プロセス終了 (targetPath=%s)", targetPath)
+		d.mu.Lock()
+		delete(d.mounts, targetPath)
+		d.mu.Unlock()
 	}()
 
 	return nil

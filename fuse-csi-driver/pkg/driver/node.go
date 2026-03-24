@@ -27,6 +27,16 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 
 	klog.Infof("NodePublishVolume: targetPath=%s type=%s", targetPath, fsType)
 
+	// 冪等性チェック: kubelet はリトライ時に同じ targetPath で再呼び出しする場合がある
+	// 既にマウント済みであれば成功を返す（CSI spec 必須要件）
+	d.mu.RLock()
+	_, alreadyMounted := d.mounts[targetPath]
+	d.mu.RUnlock()
+	if alreadyMounted {
+		klog.Infof("NodePublishVolume: %s は既にマウント済み（冪等）", targetPath)
+		return &csi.NodePublishVolumeResponse{}, nil
+	}
+
 	if err := os.MkdirAll(targetPath, 0755); err != nil {
 		return nil, status.Errorf(codes.Internal, "targetPath 作成失敗: %v", err)
 	}
