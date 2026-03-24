@@ -1,0 +1,85 @@
+# =============================================================================
+# ユーザー Pod サンプル: sshfs（サイドカーなし版）
+#
+# 使い方:
+#   1. Capsule テナント namespace に Secret を作成
+#      kubectl create secret generic ssh-key \
+#        --from-literal=private_key="$(cat ~/.ssh/sshfs_key)" \
+#        -n <tenant-namespace>
+#
+#   2. volumeAttributes の host / user / remotePath を実環境に合わせて変更
+#
+#   3. Pod をデプロイ（Kyverno が securityContext と hostUsers: false を自動注入）
+#      kubectl apply -f sshfs/deploy-kind-no-sidecar.yaml -n <tenant-namespace>
+#
+# CSI driver が事前にデプロイ済みであること:
+#   kubectl apply -f csi/fuse-csi-driver.yaml
+#   kubectl apply -f csi/fuse-csi-driver-daemonset.yaml
+#
+# 旧アーキテクチャ（deploy-kind.yaml）との違い:
+#   - sshfs-proxy サイドカーが不要（CSI driver が代わりに処理）
+#   - privileged: true が不要（PSS restricted に準拠）
+#   - securityContext は Kyverno が自動注入（ユーザーは書かなくてよい）
+#   - hostUsers: false も Kyverno が自動注入
+# =============================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sshfs-example
+  # namespace は Capsule テナント namespace (例: oil-ns-1) に変更すること
+  labels:
+    app.kubernetes.io/name: sshfs-example
+spec:
+  containers:
+    - name: app
+      image: busybox:stable
+      # securityContext は Kyverno が以下を自動注入するため記述不要:
+      #   runAsNonRoot: true
+      #   runAsUser: 1000
+      #   seccompProfile: { type: RuntimeDefault }
+      #   allowPrivilegeEscalation: false
+      #   capabilities: { drop: [ALL] }
+      # spec.hostUsers: false も Kyverno が自動注入
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          echo "=== sshfs マウント確認 ==="
+          mount | grep fuse || echo "(fuse マウントなし)"
+          echo "=== /data の内容 ==="
+          ls -la /data
+          echo "=== 書き込みテスト (UID=$(id -u)) ==="
+          echo "hello fuse from uid=$(id -u)" > /data/test.txt && cat /data/test.txt
+          sleep infinity
+      volumeMounts:
+        - name: sshfs-vol
+          mountPath: /data
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+
+  volumes:
+    - name: sshfs-vol
+      csi:
+        driver: fuse.csi.fuse-k8s.io
+        volumeAttributes:
+          # type: sshfs または s3fs を指定
+          type: sshfs
+          # SSH 接続情報 (環境に合わせて変更)
+          host: "your-ssh-host"
+          user: "your-user"
+          remotePath: "/remote/path"
+          port: "22"
+          # ホスト鍵検証: "true"=accept-new（デフォルト）/ "false"=無効（テスト用）
+          strictHostKeyCheck: "true"
+        nodePublishSecretRef:
+          # SSH 秘密鍵を格納する Secret 名
+          # kubectl create secret generic ssh-key \
+          #   --from-literal=private_key="$(cat ~/.ssh/sshfs_key)" \
+          #   -n <tenant-namespace>
+          name: ssh-key
+
+  terminationGracePeriodSeconds: 30
