@@ -1,0 +1,29 @@
+# =============================================================================
+# fuse-csi-driver: Namespace + CSIDriver リソース
+#
+# 使い方:
+#   kubectl apply -f csi/fuse-csi-driver.yaml
+# =============================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fuse-csi-system
+  labels:
+    # Capsule テナント外の管理者 namespace
+    # PSS privileged が必要な CSI DaemonSet のため PSS restricted は適用しない
+    app.kubernetes.io/managed-by: kubectl
+
+---
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: fuse.csi.fuse-k8s.io
+spec:
+  # コントローラーへのアタッチ不要（Node-only driver）
+  attachRequired: false
+  # NodePublishVolume 時に Pod 情報を渡す
+  podInfoOnMount: true
+  # エフェメラルボリュームのみサポート（PVC/PV 不要）
+  volumeLifecycleModes:
+    - Ephemeral
