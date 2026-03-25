@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
@@ -15,6 +16,7 @@ import (
 // NodePublishVolume は kubelet から呼ばれ、targetPath に FUSE ファイルシステムをマウントする。
 // volumeContext["type"] で sshfs / s3fs を切り替える。
 // 認証情報は nodePublishSecretRef で渡された Secret の内容が secrets に入る。
+// fd-passing 方式: open(/dev/fuse) + mount() をここで実行し、fd を UDS 経由でサイドカーに渡す。
 func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	targetPath := req.GetTargetPath()
 	if targetPath == "" {
@@ -24,11 +26,16 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 	volCtx := req.GetVolumeContext()
 	secrets := req.GetSecrets()
 	fsType := volCtx["type"]
+	podUID := volCtx["csi.storage.k8s.io/pod.uid"]
 
-	klog.Infof("NodePublishVolume: targetPath=%s type=%s", targetPath, fsType)
+	if podUID == "" {
+		return nil, status.Error(codes.InvalidArgument,
+			"pod.uid が VolumeContext に含まれていません (CSIDriver の podInfoOnMount: true を確認)")
+	}
+
+	klog.Infof("NodePublishVolume: targetPath=%s type=%s podUID=%s", targetPath, fsType, podUID)
 
 	// 冪等性チェック: kubelet はリトライ時に同じ targetPath で再呼び出しする場合がある
-	// 既にマウント済みであれば成功を返す（CSI spec 必須要件）
 	d.mu.RLock()
 	_, alreadyMounted := d.mounts[targetPath]
 	d.mu.RUnlock()
@@ -41,12 +48,16 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 		return nil, status.Errorf(codes.Internal, "targetPath 作成失敗: %v", err)
 	}
 
+	// emptyDir のホストパスを計算
+	// CSI DaemonSet は /var/lib/kubelet を hostPath でマウント済みのため直接アクセス可能
+	emptyDir := emptyDirHostPath(podUID)
+
 	var err error
 	switch fsType {
 	case "sshfs":
-		err = d.MountSshfs(targetPath, volCtx, secrets)
+		err = d.MountSshfs(targetPath, emptyDir, volCtx, secrets)
 	case "s3fs":
-		err = d.MountS3fs(targetPath, volCtx, secrets)
+		err = d.MountS3fs(targetPath, emptyDir, volCtx, secrets)
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "未知の type: %q (sshfs または s3fs を指定)", fsType)
 	}
@@ -59,7 +70,8 @@ func (d *Driver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolu
 }
 
 // NodeUnpublishVolume は kubelet から呼ばれ、targetPath のマウントを解除する。
-// fusermount3 でアンマウントし、プロセスと一時ファイルをクリーンアップする。
+// UDS server を停止し、fusefd をクローズ（→ サイドカーの FUSE デーモンが終了）し、
+// FUSE マウントをデタッチする。
 func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	targetPath := req.GetTargetPath()
 	if targetPath == "" {
@@ -68,31 +80,19 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublish
 
 	klog.Infof("NodeUnpublishVolume: targetPath=%s", targetPath)
 
-	// アンマウント: fusermount3 を試み、失敗したら umount にフォールバック
-	// （既にアンマウント済みでもエラーにしない）
-	if out, err := exec.Command("fusermount3", "-u", targetPath).CombinedOutput(); err != nil {
-		klog.Warningf("fusermount3 失敗、umount にフォールバック: %s: %v", out, err)
-		if out2, err2 := exec.Command("umount", targetPath).CombinedOutput(); err2 != nil {
-			klog.Warningf("umount も失敗（既にアンマウント済みの可能性）: %s: %v", out2, err2)
-		}
-	}
-
-	// プロセスと一時認証情報ファイルをクリーンアップ
 	d.mu.Lock()
 	if info, ok := d.mounts[targetPath]; ok {
-		if proc, err := os.FindProcess(info.pid); err == nil {
-			proc.Kill()
-		}
-		if info.keyFile != "" {
-			if err := os.Remove(info.keyFile); err != nil && !os.IsNotExist(err) {
-				klog.Warningf("一時ファイル削除失敗: %s: %v", info.keyFile, err)
-			}
-		}
+		info.stopFdSrv()               // UDS server 停止 + params.json / csi.sock 削除
+		syscall.Close(info.fusefd)     // /dev/fuse fd クローズ → サイドカーの FUSE デーモンが終了
 		delete(d.mounts, targetPath)
 	}
 	d.mu.Unlock()
 
-	// targetPath ディレクトリを削除（なければ無視）
+	// FUSE アンマウント（lazy unmount: サイドカー終了後にカーネルが自動アンマウントする場合もある）
+	if out, err := exec.Command("umount", "-l", targetPath).CombinedOutput(); err != nil {
+		klog.Warningf("umount 失敗（既にアンマウント済みの可能性）: %s: %v", out, err)
+	}
+
 	if err := os.Remove(targetPath); err != nil && !os.IsNotExist(err) {
 		klog.Warningf("targetPath 削除失敗: %s: %v", targetPath, err)
 	}
