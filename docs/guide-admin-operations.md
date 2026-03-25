@@ -189,7 +189,11 @@ mount | grep "fuse.sshfs\|fuse.s3fs"
 
 ```bash
 # 対象ノードで実行
+# 標準 kubelet の場合
 TARGET_PATH=/var/lib/kubelet/pods/<pod-uid>/volumes/...
+# k3s の場合
+TARGET_PATH=/var/lib/rancher/k3s/agent/kubelet/pods/<pod-uid>/volumes/...
+
 fusermount3 -u $TARGET_PATH || umount $TARGET_PATH
 ```
 
@@ -214,12 +218,18 @@ kubectl logs -n fuse-csi-system <pod-name> -c fuse-csi-driver --previous
 
 よくある原因:
 - `/dev/fuse` が存在しない → ノードで `modprobe fuse`
-- ソケットファイルが残留 → `/var/lib/kubelet/plugins/fuse.csi.fuse-k8s.io/csi.sock` を削除
+- ソケットファイルが残留 → 以下のパスを確認して削除
 
 ```bash
-# ソケットファイルの残留を確認・削除（対象ノードで）
+# ソケットファイルの残留を確認・削除（対象ノードで実行）
+
+# 標準 kubelet（kubeadm / RKE2）の場合
 ls -la /var/lib/kubelet/plugins/fuse.csi.fuse-k8s.io/
 rm -f /var/lib/kubelet/plugins/fuse.csi.fuse-k8s.io/csi.sock
+
+# k3s の場合（kubelet パスが異なる）
+ls -la /var/lib/rancher/k3s/agent/kubelet/plugins/fuse.csi.fuse-k8s.io/
+rm -f /var/lib/rancher/k3s/agent/kubelet/plugins/fuse.csi.fuse-k8s.io/csi.sock
 ```
 
 ### ユーザー Pod がマウントできない

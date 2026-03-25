@@ -94,6 +94,9 @@ func main() {
 	fusefd := fds[0]
 	fmt.Printf("fusefd=%d 受信完了\n", fusefd)
 
+	// fusefd を子プロセス（sshfs → fusermount3-stub）に継承させるため CLOEXEC を外す
+	unix.FcntlInt(uintptr(fusefd), unix.F_SETFD, 0) // clear FD_CLOEXEC
+
 	// 4. SSH 秘密鍵を一時ファイルに書き出す
 	keyFile, err := os.CreateTemp("", "sshfs-key-*")
 	if err != nil {
@@ -115,19 +118,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 5. sshfs 起動
-	// fusefd を ExtraFiles[0] として渡す → 子プロセス内では fd=3 (stdin=0, stdout=1, stderr=2 の次)
-	const childFd = 3
-	fuseFile := os.NewFile(uintptr(fusefd), "fuse")
+	// 5. /dev/fuse を touch（存在しない場合のみ）
+	// libfuse3 はキャラクターデバイスとして open できないと fusermount3 にフォールバックする。
+	if _, err := os.Stat("/dev/fuse"); os.IsNotExist(err) {
+		if f, err := os.Create("/dev/fuse"); err == nil {
+			f.Close()
+		}
+	}
 
+	// 6. sshfs 起動
+	// FUSE_PREOPEN_FD: fusermount3-stub が fusefd を libfuse に返すために使う
 	args := []string{
 		params.User + "@" + params.Host + ":" + params.RemotePath,
 		"/mnt/fuse",
 		"-p", port,
-		"-o", fmt.Sprintf("fd=%d", childFd),
-		"-o", "rootmode=40000",
-		"-o", "user_id=0",
-		"-o", "group_id=0",
 		"-o", "allow_other",
 		"-o", "umask=000",
 		"-o", "IdentityFile=" + keyFile.Name(),
@@ -135,11 +139,11 @@ func main() {
 		"-f",
 	}
 
-	fmt.Printf("sshfs 起動: %v\n", args)
+	fmt.Printf("sshfs 起動: %s@%s:%s\n", params.User, params.Host, params.RemotePath)
 	cmd := exec.Command("sshfs", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.ExtraFiles = []*os.File{fuseFile} // fd 3 in child
+	cmd.Env = append(os.Environ(), fmt.Sprintf("FUSE_PREOPEN_FD=%d", fusefd))
 
 	if err := cmd.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "sshfs 終了: %v\n", err)

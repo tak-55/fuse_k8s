@@ -46,8 +46,9 @@ ssh -i ~/.ssh/sshfs_key your-user@your-ssh-host "echo 接続OK"
 
 ```bash
 # Secret 作成（自分のテナント namespace に作成）
+# 注意: --from-file を使うこと。--from-literal は末尾改行が失われ SSH 認証エラーになる
 kubectl create secret generic ssh-key \
-  --from-literal=private_key="$(cat ~/.ssh/sshfs_key)" \
+  --from-file=private_key=~/.ssh/sshfs_key \
   -n <自分のテナント namespace>
 
 # 確認（内容はロードされないが、キーが登録されているか確認）
@@ -284,7 +285,7 @@ Kyverno は `+(key): value` 構文（未設定時のみ）を使っているた�
 # 古い Secret を削除して再作成
 kubectl delete secret ssh-key -n <テナント namespace>
 kubectl create secret generic ssh-key \
-  --from-literal=private_key="$(cat ~/.ssh/new_sshfs_key)" \
+  --from-file=private_key=~/.ssh/new_sshfs_key \
   -n <テナント namespace>
 
 # Pod を再起動（Secret は次のマウント時に反映）
