@@ -19,6 +19,10 @@
     "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
       "version": "latest",
       "enableNonRootDocker": "true"
+    },
+    // Node.js（Claude Code のインストールに必要）
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts"
     }
   },
 
