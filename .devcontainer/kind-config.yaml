@@ -11,6 +11,6 @@ nodes:
           kubeletExtraArgs:
             node-labels: "ingress-ready=true"
     extraMounts:
-      # /dev/fuse をノードコンテナに共有
+      # /dev/fuse をノードコンテナに共有（macOS の Docker Desktop では自動露出されないため必要）
       - hostPath: /dev/fuse
         containerPath: /dev/fuse

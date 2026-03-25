@@ -151,8 +151,13 @@ kubectl create secret docker-registry ghcr-secret \
 # Namespace + CSIDriver リソース
 kubectl apply -f csi/fuse-csi-driver.yaml
 
-# DaemonSet（本番用）
-kubectl apply -f csi/fuse-csi-driver-daemonset-prod.yaml
+# DaemonSet の選択:
+#   標準 kubelet（kubeadm / RKE2）: fuse-csi-driver-daemonset-prod.yaml
+#   k3s:                            fuse-csi-driver-daemonset-k3s.yaml
+#
+# k3s は kubelet パスが /var/lib/rancher/k3s/agent/kubelet のため専用マニフェストを使用
+kubectl apply -f csi/fuse-csi-driver-daemonset-k3s.yaml   # k3s の場合
+# kubectl apply -f csi/fuse-csi-driver-daemonset-prod.yaml  # kubeadm/RKE2 の場合
 
 # 全ノードで DaemonSet が起動するまで待機
 kubectl rollout status daemonset/fuse-csi-driver -n fuse-csi-system --timeout=300s
@@ -221,39 +226,41 @@ oil-test   restricted                           example-tenant
 ### Secret 作成
 
 ```bash
+# 注意: --from-file を使うこと。--from-literal は末尾改行が失われ SSH 認証エラーになる
 kubectl create secret generic ssh-key \
-  --from-literal=private_key="$(cat ~/.ssh/sshfs_key)" \
+  --from-file=private_key=~/.ssh/sshfs_key \
   -n oil-test
 ```
 
 ### Pod デプロイ
 
-`sshfs/deploy-kind-no-sidecar.yaml` をコピーして `host`/`user`/`remotePath` を編集:
+`sshfs/deploy-kind-fdpass.yaml` をコピーして `host`/`user`/`remotePath` を編集:
 
 ```bash
-cp sshfs/deploy-kind-no-sidecar.yaml /tmp/sshfs-test.yaml
+cp sshfs/deploy-kind-fdpass.yaml /tmp/sshfs-test.yaml
 # host / user / remotePath を実環境の値に変更
+# image: sshfs-sidecar:latest を ghcr.io のイメージに変更し imagePullPolicy: Always に変更
 kubectl apply -f /tmp/sshfs-test.yaml -n oil-test
-kubectl wait --for=condition=Ready pod/sshfs-example -n oil-test --timeout=60s
+kubectl wait --for=condition=Ready pod/sshfs-fdpass-example -n oil-test --timeout=60s
 ```
 
 ### 確認テスト
 
 ```bash
 # Kyverno ミューテーション確認
-kubectl get pod sshfs-example -n oil-test -o jsonpath='{.spec.hostUsers}' && echo
+kubectl get pod sshfs-fdpass-example -n oil-test -o jsonpath='{.spec.hostUsers}' && echo
 # 期待: false
 
-kubectl get pod sshfs-example -n oil-test \
+kubectl get pod sshfs-fdpass-example -n oil-test \
   -o jsonpath='{.spec.securityContext}' | python3 -m json.tool
 # 期待: runAsNonRoot:true, runAsUser:1000, seccompProfile:RuntimeDefault
 
 # マウント確認
-kubectl exec -n oil-test sshfs-example -- mount | grep fuse
+kubectl exec -n oil-test sshfs-fdpass-example -- mount | grep fuse
 # 期待: fuse.sshfs が /data にマウントされている
 
 # UID 1000 から書き込みテスト
-kubectl exec -n oil-test sshfs-example -- sh -c \
+kubectl exec -n oil-test sshfs-fdpass-example -- sh -c \
   'id && echo "k3s test $(hostname)" > /data/test.txt && cat /data/test.txt'
 # 期待: uid=1000 で書き込み成功
 ```
@@ -304,7 +311,7 @@ kubectl create secret generic s3-credentials \
 ## 10. クリーンアップ
 
 ```bash
-kubectl delete pod sshfs-example -n oil-test
+kubectl delete pod sshfs-fdpass-example -n oil-test
 kubectl delete namespace oil-test
 kubectl delete -f policy/capsule-tenant-example.yaml
 ```
@@ -336,6 +343,21 @@ kubectl label namespace fuse-csi-system \
 ls -la /dev/fuse
 # 存在しない場合: カーネルモジュールロード
 modprobe fuse
+```
+
+### k3s で DaemonSet が起動しない（ソケットパス関連）
+
+k3s の kubelet パスは `/var/lib/kubelet` ではなく `/var/lib/rancher/k3s/agent/kubelet` です。
+`fuse-csi-driver-daemonset-prod.yaml` を使うと hostPath のマウントに失敗します。
+`fuse-csi-driver-daemonset-k3s.yaml` を使用してください。
+
+```bash
+# 現在のマニフェストを確認
+kubectl get daemonset fuse-csi-driver -n fuse-csi-system -o yaml | grep hostPath
+
+# 修正: k3s 用マニフェストを再適用
+kubectl apply -f csi/fuse-csi-driver.yaml
+kubectl apply -f csi/fuse-csi-driver-daemonset-k3s.yaml
 ```
 
 ### Cilium によるトラフィックブロック

@@ -6,7 +6,7 @@
 # =============================================================================
 
 # Stage 1: Go バイナリのビルド
-FROM golang:1.21 AS builder
+FROM golang:1.25 AS builder
 WORKDIR /workspace
 COPY go.mod go.sum ./
 RUN go mod download

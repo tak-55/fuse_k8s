@@ -95,6 +95,11 @@ func main() {
 	fusefd := fds[0]
 	fmt.Printf("fusefd=%d 受信完了\n", fusefd)
 
+	// fusefd を子プロセス（s3fs → fusermount3-stub）に継承させるため CLOEXEC を外す
+	if err := unix.SetNonblock(fusefd, false); err == nil {
+		unix.FcntlInt(uintptr(fusefd), unix.F_SETFD, 0) // clear FD_CLOEXEC
+	}
+
 	// 4. passwd-s3fs を一時ファイルに書き出す
 	passwdFile, err := os.CreateTemp("", "s3fs-passwd-*")
 	if err != nil {
@@ -116,18 +121,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 5. s3fs 起動
-	// fusefd を ExtraFiles[0] として渡す → 子プロセス内では fd=3 (stdin=0, stdout=1, stderr=2 の次)
-	const childFd = 3
-	fuseFile := os.NewFile(uintptr(fusefd), "fuse")
+	// 5. /dev/fuse を touch（存在しない場合のみ）
+	// libfuse3 はキャラクターデバイスとして open できないと fusermount3 にフォールバックする。
+	// /dev/fuse が通常ファイルとして存在すれば open は成功するが mount(2) で EPERM になり、
+	// fusermount3（= 我々の stub）が呼ばれる。
+	if _, err := os.Stat("/dev/fuse"); os.IsNotExist(err) {
+		if f, err := os.Create("/dev/fuse"); err == nil {
+			f.Close()
+		}
+	}
 
+	// 6. s3fs 起動
+	// FUSE_PREOPEN_FD: fusermount3-stub が fusefd を libfuse に返すために使う
+	// fusefd は exec を経由して fusermount3-stub に継承される（CLOEXEC なし）
 	args := []string{
 		params.Bucket,
 		"/mnt/fuse",
-		"-o", fmt.Sprintf("fd=%d", childFd),
-		"-o", "rootmode=40000",
-		"-o", "user_id=0",
-		"-o", "group_id=0",
 		"-o", "allow_other",
 		"-o", "umask=000",
 		"-o", "passwd_file=" + passwdFile.Name(),
@@ -140,11 +149,11 @@ func main() {
 		args = append(args, "-o", "no_check_certificate")
 	}
 
-	fmt.Printf("s3fs 起動: bucket=%s endpoint=%s\n", params.Bucket, params.Endpoint)
+	fmt.Printf("s3fs 起動: bucket=%s endpoint=%s fusefd=%d\n", params.Bucket, params.Endpoint, fusefd)
 	cmd := exec.Command("s3fs", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.ExtraFiles = []*os.File{fuseFile} // fd 3 in child
+	cmd.Env = append(os.Environ(), fmt.Sprintf("FUSE_PREOPEN_FD=%d", fusefd))
 
 	if err := cmd.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "s3fs 終了: %v\n", err)

@@ -4,6 +4,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /receiver ./receiver/
+RUN CGO_ENABLED=0 GOOS=linux go build -o /fusermount3-stub ./fusermount3-stub/
 
 FROM ubuntu:22.04
 RUN apt-get update && apt-get install -y \
@@ -13,4 +14,7 @@ RUN apt-get update && apt-get install -y \
 RUN echo "user_allow_other" >> /etc/fuse.conf
 
 COPY --from=builder /receiver /bin/receiver
+# 本物の fusermount3 を stub に置き換える。
+# stub は mount を実行せず、FUSE_PREOPEN_FD の fd を libfuse に返すだけ。
+COPY --from=builder /fusermount3-stub /usr/bin/fusermount3
 ENTRYPOINT ["/bin/receiver"]
