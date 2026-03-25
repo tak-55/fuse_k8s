@@ -1,0 +1,53 @@
+# fd-passing アーキテクチャ用 Pod サンプル
+# sshfs-sidecar が FUSE データプレーンを担当する
+# securityContext / hostUsers は Kyverno が自動注入
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sshfs-fdpass-example
+  # namespace は Capsule テナント namespace に変更
+spec:
+  containers:
+    - name: app
+      image: busybox:stable
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          echo "=== マウント確認 ==="
+          ls -la /data
+          echo "=== 書き込みテスト ==="
+          echo "hello fd-pass $(date)" > /data/test.txt && cat /data/test.txt
+          sleep infinity
+      volumeMounts:
+        - name: sshfs-vol
+          mountPath: /data
+
+    - name: sshfs-sidecar
+      # kind 環境: imagePullPolicy: Never を使用
+      image: sshfs-sidecar:latest
+      imagePullPolicy: Never
+      # securityContext は Kyverno が自動注入（非特権）
+      volumeMounts:
+        - name: fuse-fd
+          mountPath: /fuse-fd
+
+  volumes:
+    - name: sshfs-vol
+      csi:
+        driver: fuse.csi.fuse-k8s.io
+        volumeAttributes:
+          type: sshfs
+          host: "your-ssh-host"         # SSH サーバーのホスト名/IP
+          user: "your-user"             # SSH ユーザー名
+          remotePath: "/remote/path"    # マウントするリモートパス
+          port: "22"
+        nodePublishSecretRef:
+          name: ssh-key                 # kubectl create secret generic ssh-key \
+                                        #   --from-literal=private_key="$(cat ~/.ssh/id_ed25519)"
+
+    - name: fuse-fd
+      emptyDir: {}
+      # CSI DaemonSet が params.json + csi.sock をここに書く
+      # sidecar は /fuse-fd/csi.sock に接続して fd を受け取る
+
+  terminationGracePeriodSeconds: 30
