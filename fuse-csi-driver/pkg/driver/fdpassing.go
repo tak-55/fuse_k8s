@@ -89,6 +89,9 @@ func startFdServer(emptyDir string, params FuseParams, creds FuseCreds, fusefd i
 	if err != nil {
 		return nil, fmt.Errorf("UDS サーバー起動失敗 (%s): %w", socketPath, err)
 	}
+	// 0666: CSI DaemonSet (root) が作成するが、サイドカー (UID 1000) が接続する必要がある。
+	// このソケットは Pod 固有の emptyDir 内にあり、同一 Pod のコンテナのみがアクセス可能。
+	// 他の Pod はこのパスを hostPath マウントしない限りアクセスできないため、リスクは低い。
 	if err := os.Chmod(socketPath, 0666); err != nil {
 		l.Close()
 		return nil, err
@@ -98,16 +101,20 @@ func startFdServer(emptyDir string, params FuseParams, creds FuseCreds, fusefd i
 	go func() {
 		defer l.Close()
 		for {
-			l.(*net.UnixListener).SetDeadline(time.Now().Add(10 * time.Minute))
+			l.(*net.UnixListener).SetDeadline(time.Now().Add(30 * time.Second))
 			conn, err := l.Accept()
 			if err != nil {
 				select {
 				case <-stopCh:
 					return
 				default:
-					klog.Warningf("UDS accept エラー (socket=%s): %v", socketPath, err)
-					return
 				}
+				// タイムアウトエラーの場合はループ継続（サイドカー起動待ち）
+				if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
+					continue
+				}
+				klog.Warningf("UDS accept エラー (socket=%s): %v", socketPath, err)
+				return
 			}
 			go sendFdToSidecar(conn.(*net.UnixConn), creds, fusefd)
 		}

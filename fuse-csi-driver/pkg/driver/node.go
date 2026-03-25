@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"syscall"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog/v2"
@@ -83,7 +83,7 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublish
 	d.mu.Lock()
 	if info, ok := d.mounts[targetPath]; ok {
 		info.stopFdSrv()               // UDS server 停止 + params.json / csi.sock 削除
-		syscall.Close(info.fusefd)     // /dev/fuse fd クローズ → サイドカーの FUSE デーモンが終了
+		unix.Close(info.fusefd)        // /dev/fuse fd クローズ → サイドカーの FUSE デーモンが終了
 		delete(d.mounts, targetPath)
 	}
 	d.mu.Unlock()
