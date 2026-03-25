@@ -26,8 +26,8 @@ type Driver struct {
 }
 
 type mountInfo struct {
-	pid       int
-	keyFile   string    // 一時認証情報ファイルパス（クリーンアップ用）
+	fusefd    int       // open("/dev/fuse") で取得した fd
+	stopFdSrv func()    // UDS サーバー停止関数
 	fsType    string    // "sshfs" or "s3fs"（ログ・デバッグ用）
 	mountedAt time.Time
 }
