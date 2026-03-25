@@ -10,6 +10,13 @@ if ! command -v kind &>/dev/null; then
   echo "kind ${KIND_VERSION} インストール完了"
 fi
 
+# Claude Code インストール
+if ! command -v claude &>/dev/null; then
+  echo "=== Claude Code インストール中 ==="
+  npm install -g @anthropic-ai/claude-code
+  echo "Claude Code インストール完了"
+fi
+
 # Go モジュールキャッシュの事前取得
 echo "=== Go 依存関係を取得中 ==="
 (cd /workspaces/fuse_k8s/fuse-csi-driver && go mod download)
