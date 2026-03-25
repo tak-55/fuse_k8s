@@ -1,0 +1,36 @@
+{
+  "name": "fuse-k8s dev",
+  "image": "mcr.microsoft.com/devcontainers/go:1.21-bookworm",
+
+  // ホストの Docker ソケットをマウント（Docker-outside-of-Docker）
+  // kind ノードはホスト Docker 上のコンテナとして起動される
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+
+  "features": {
+    // kubectl + kind インストール
+    "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
+      "version": "latest",
+      "helm": "none",
+      "minikube": "none"
+    },
+    // Docker CLI のみ（デーモン不要、ソケット経由でホストに接続）
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "version": "latest",
+      "enableNonRootDocker": "true"
+    }
+  },
+
+  "onCreateCommand": "bash .devcontainer/setup.sh",
+
+  "remoteUser": "vscode",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go"
+      ]
+    }
+  }
+}
