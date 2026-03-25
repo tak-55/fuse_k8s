@@ -7,7 +7,7 @@ import (
 
 func TestMountS3fs_ValidationMissingBucket(t *testing.T) {
 	d := New("test-node", "test")
-	err := d.MountS3fs("/tmp/test", map[string]string{
+	err := d.MountS3fs("/tmp/test", "/tmp/emptydir", map[string]string{
 		"endpoint": "http://minio:9000",
 	}, map[string]string{
 		"access_key": "key",
@@ -23,7 +23,7 @@ func TestMountS3fs_ValidationMissingBucket(t *testing.T) {
 
 func TestMountS3fs_ValidationMissingEndpoint(t *testing.T) {
 	d := New("test-node", "test")
-	err := d.MountS3fs("/tmp/test", map[string]string{
+	err := d.MountS3fs("/tmp/test", "/tmp/emptydir", map[string]string{
 		"bucket": "my-bucket",
 	}, map[string]string{
 		"access_key": "key",
@@ -39,7 +39,7 @@ func TestMountS3fs_ValidationMissingEndpoint(t *testing.T) {
 
 func TestMountS3fs_ValidationMissingAccessKey(t *testing.T) {
 	d := New("test-node", "test")
-	err := d.MountS3fs("/tmp/test", map[string]string{
+	err := d.MountS3fs("/tmp/test", "/tmp/emptydir", map[string]string{
 		"bucket":   "my-bucket",
 		"endpoint": "http://minio:9000",
 	}, map[string]string{
@@ -55,7 +55,7 @@ func TestMountS3fs_ValidationMissingAccessKey(t *testing.T) {
 
 func TestMountS3fs_ValidationMissingSecretKey(t *testing.T) {
 	d := New("test-node", "test")
-	err := d.MountS3fs("/tmp/test", map[string]string{
+	err := d.MountS3fs("/tmp/test", "/tmp/emptydir", map[string]string{
 		"bucket":   "my-bucket",
 		"endpoint": "http://minio:9000",
 	}, map[string]string{
