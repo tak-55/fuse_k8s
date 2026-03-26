@@ -121,15 +121,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 5. /dev/fuse を touch（存在しない場合のみ）
-	// libfuse3 はキャラクターデバイスとして open できないと fusermount3 にフォールバックする。
-	// /dev/fuse が通常ファイルとして存在すれば open は成功するが mount(2) で EPERM になり、
-	// fusermount3（= 我々の stub）が呼ばれる。
-	if _, err := os.Stat("/dev/fuse"); os.IsNotExist(err) {
-		if f, err := os.Create("/dev/fuse"); err == nil {
-			f.Close()
-		}
-	}
+	// 5. /dev/fuse は emptyDir subPath でコンテナ起動時に bind mount される。
+	// container runtime が /dev を fresh tmpfs に差し替えるため、
+	// ここでの os.Create("/dev/fuse") は不要（Dockerfile での作成も無効）。
+	// libfuse3 が stat("/dev/fuse") を通過できるよう、Pod マニフェスト側で
+	// emptyDir subPath を /dev/fuse にマウントすること。
 
 	// 6. s3fs 起動
 	// FUSE_PREOPEN_FD: fusermount3-stub が fusefd を libfuse に返すために使う
@@ -155,8 +151,20 @@ func main() {
 	cmd.Stderr = os.Stderr
 	cmd.Env = append(os.Environ(), fmt.Sprintf("FUSE_PREOPEN_FD=%d", fusefd))
 
-	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "s3fs 終了: %v\n", err)
+	// s3fs をバックグラウンドで起動し、プロセスが開始したら ready ファイルを書く。
+	// readinessProbe がこのファイルを検出したとき kubelet はアプリコンテナを起動する。
+	readyPath := "/fuse-fd/ready"
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "s3fs 起動失敗: %v\n", err)
 		os.Exit(1)
 	}
+	os.WriteFile(readyPath, []byte("ok\n"), 0644)
+	fmt.Println("s3fs プロセス起動完了 → /fuse-fd/ready 書き込み済み")
+
+	if err := cmd.Wait(); err != nil {
+		fmt.Fprintf(os.Stderr, "s3fs 終了: %v\n", err)
+		os.Remove(readyPath)
+		os.Exit(1)
+	}
+	os.Remove(readyPath)
 }

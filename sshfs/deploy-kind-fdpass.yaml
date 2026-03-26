@@ -1,15 +1,76 @@
-# fd-passing アーキテクチャ用 Pod サンプル
+# =============================================================================
+# fd-passing アーキテクチャ用 Pod サンプル（kind 開発環境）
 # sshfs-sidecar が FUSE データプレーンを担当する
-# securityContext / hostUsers は Kyverno が自動注入
+#
+# 使い方:
+#   1. SSH 秘密鍵 Secret を作成（--from-file を使うこと）
+#      kubectl create secret generic ssh-key \
+#        --from-file=private_key=~/.ssh/sshfs_key \
+#        -n <tenant-namespace>
+#
+#   2. volumeAttributes の host / user / remotePath を実環境に合わせて変更
+#
+#   3. Pod をデプロイ
+#      kubectl apply -f sshfs/deploy-kind-fdpass.yaml -n <tenant-namespace>
+#
+# 注意:
+#   - FUSE CSI ボリュームを持つ Pod は hostUsers: false が Kyverno から自動除外される
+#     （/dev/fuse FUSE は MOUNT_ATTR_IDMAP 非対応のため）
+#   - securityContext（PSS restricted）は Kyverno が自動注入
+#   - 秘密鍵は --from-literal ではなく --from-file で作成すること
+#     （--from-literal はシェル展開で末尾改行を除去するため error in libcrypto が発生する）
+#   - SSH サーバー側は SFTP + ChrootDirectory 構成を推奨（docs/design-sftp-chroot-ssh-server.md）
+# =============================================================================
 apiVersion: v1
 kind: Pod
 metadata:
   name: sshfs-fdpass-example
-  # namespace は Capsule テナント namespace に変更
+  # namespace は Capsule テナント namespace に変更すること
 spec:
+  # sshfs-sidecar を sidecar initContainer として定義する。
+  # FUSE デーモン（sshfs）が起動し /fuse-fd/ready を書いた後に app コンテナが起動する。
+  # これにより FUSE bind mount が sshfs 起動前に runc でタイムアウトする問題を回避する。
+  # （Kubernetes 1.29+ の sidecar initContainer 機能を使用）
+  initContainers:
+    # /dev/fuse 用の空ファイルを作成（libfuse が stat("/dev/fuse") を要求するため）
+    # コンテナ runtime は /dev を fresh tmpfs に差し替えるため、
+    # emptyDir subPath で /dev/fuse を上書きする必要がある。
+    - name: create-fuse-device
+      image: busybox:stable
+      command: ["touch", "/fuse-dev/fuse"]
+      volumeMounts:
+        - name: fuse-device
+          mountPath: /fuse-dev
+
+    # sshfs-sidecar: FUSE fd を受け取り sshfs を起動するサイドカー
+    # restartPolicy: Always → sidecar initContainer（app より先に起動、app と並行して稼働）
+    - name: sshfs-sidecar
+      image: sshfs-sidecar:latest
+      imagePullPolicy: Never
+      restartPolicy: Always
+      # readinessProbe が通過するまで app コンテナの起動を待機する
+      readinessProbe:
+        exec:
+          command: ["test", "-f", "/fuse-fd/ready"]
+        initialDelaySeconds: 2
+        periodSeconds: 2
+        failureThreshold: 30
+      volumeMounts:
+        - name: fuse-fd
+          mountPath: /fuse-fd
+        # /dev/fuse を空ファイルで上書き（libfuse の stat チェックを通過させる）
+        - name: fuse-device
+          mountPath: /dev/fuse
+          subPath: fuse
+
   containers:
     - name: app
       image: busybox:stable
+      # securityContext（PSS restricted）は Kyverno が自動注入:
+      #   runAsNonRoot: true, runAsUser: 1000
+      #   allowPrivilegeEscalation: false, capabilities.drop: [ALL]
+      #   seccompProfile: RuntimeDefault
+      # FUSE CSI ボリュームがあるため hostUsers は注入されない（MOUNT_ATTR_IDMAP 非対応）
       command: ["/bin/sh", "-c"]
       args:
         - |
@@ -22,15 +83,6 @@ spec:
         - name: sshfs-vol
           mountPath: /data
 
-    - name: sshfs-sidecar
-      # kind 環境: imagePullPolicy: Never を使用
-      image: sshfs-sidecar:latest
-      imagePullPolicy: Never
-      # securityContext は Kyverno が自動注入（非特権）
-      volumeMounts:
-        - name: fuse-fd
-          mountPath: /fuse-fd
-
   volumes:
     - name: sshfs-vol
       csi:
@@ -39,15 +91,16 @@ spec:
           type: sshfs
           host: "your-ssh-host"         # SSH サーバーのホスト名/IP
           user: "your-user"             # SSH ユーザー名
-          remotePath: "/remote/path"    # マウントするリモートパス
+          remotePath: "/data"           # マウントするリモートパス（SFTP chroot 内のパス）
           port: "22"
+          strictHostKeyCheck: "true"    # 本番: accept-new / テスト: false
         nodePublishSecretRef:
           name: ssh-key                 # kubectl create secret generic ssh-key \
-                                        #   --from-literal=private_key="$(cat ~/.ssh/id_ed25519)"
-
+                                        #   --from-file=private_key=~/.ssh/id_ed25519 \
+                                        #   -n <namespace>
     - name: fuse-fd
       emptyDir: {}
-      # CSI DaemonSet が params.json + csi.sock をここに書く
-      # sidecar は /fuse-fd/csi.sock に接続して fd を受け取る
+    - name: fuse-device
+      emptyDir: {}
 
   terminationGracePeriodSeconds: 30

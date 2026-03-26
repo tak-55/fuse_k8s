@@ -79,11 +79,9 @@ fuse_k8s/
 │   ├── fuse-csi-driver-daemonset-prod.yaml  # 本番用（標準 kubelet パス）
 │   └── fuse-csi-driver-daemonset-k3s.yaml   # k3s 用
 ├── sshfs/                      # sshfs ユーザー Pod マニフェスト
-│   ├── deploy-kind-fdpass.yaml      # fd-passing 用（kind）
-│   └── deploy-kind-no-sidecar.yaml  # サイドカーなし用
+│   └── deploy-kind-fdpass.yaml      # fd-passing 用（kind）
 ├── s3fs/                       # s3fs ユーザー Pod マニフェスト
-│   ├── deploy-kind-fdpass.yaml
-│   └── deploy-kind-no-sidecar.yaml
+│   └── deploy-kind-fdpass.yaml      # fd-passing 用（kind）
 ├── policy/                     # Capsule Tenant + Kyverno ポリシー
 │   ├── capsule-tenant-example.yaml
 │   ├── kyverno-force-userns.yaml
