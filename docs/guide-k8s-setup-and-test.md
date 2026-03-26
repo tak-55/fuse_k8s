@@ -303,7 +303,7 @@ kubectl create secret generic s3-credentials \
   --from-literal=secret_key=minioadmin \
   -n oil-test
 
-# deploy-kind-no-sidecar.yaml の endpoint を $MINIO_IP:9000 に書き換えてデプロイ
+# s3fs/deploy-kind-fdpass.yaml の endpoint を $MINIO_IP:9000 に書き換えてデプロイ
 ```
 
 ---

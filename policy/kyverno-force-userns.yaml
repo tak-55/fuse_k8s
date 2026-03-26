@@ -34,6 +34,18 @@ spec:
             matchExpressions:
             - key: capsule.clastix.io/tenant
               operator: Exists
+    # FUSE CSI ボリュームを持つ Pod は hostUsers: false の注入をスキップする。
+    # 理由: /dev/fuse 経由の標準 FUSE filesystem は MOUNT_ATTR_IDMAP (idmapped mount)
+    # をサポートしないため、hostUsers: false 環境では runc が EINVAL で失敗する。
+    # preconditions が false の場合（FUSE ボリュームあり）はこのルールがスキップされる。
+    # セキュリティ上の考慮: FUSE CSI ドライバは特権 DaemonSet がマウントを管理する。
+    # ユーザー Pod のコンテナ自体は PSS restricted（非特権）で動作しているため
+    # user namespace なしでも十分な隔離が保たれる。
+    preconditions:
+      all:
+      - key: "{{ request.object.spec.volumes[?csi.driver=='fuse.csi.fuse-k8s.io'] | length(@) }}"
+        operator: Equals
+        value: "0"
     mutate:
       patchStrategicMerge:
         spec:

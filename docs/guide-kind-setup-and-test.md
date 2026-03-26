@@ -17,8 +17,8 @@ fuse-csi-driver を kind ローカル環境で構築・テストする手順。
 ## 1. kind クラスター作成
 
 ```bash
-# クラスター作成
-kind create cluster --name fuse-dev
+# クラスター作成（fuse-overlayfs snapshotter 設定込み）
+kind create cluster --name fuse-dev --config kind-config.yaml
 
 # コンテキスト確認
 kubectl cluster-info --context kind-fuse-dev
@@ -26,6 +26,18 @@ kubectl get nodes
 ```
 
 期待結果: ノードが `Ready` になる
+
+> **注意（hostUsers: false に必要な後処理）**:
+> `kind-config.yaml` は containerd に fuse-overlayfs snapshotter を設定しているが、
+> `containerd-fuse-overlayfs` デーモンは kind コンテナ起動後に手動で開始する必要がある。
+>
+> ```bash
+> docker exec fuse-dev-control-plane systemctl start containerd-fuse-overlayfs
+> # 自動起動設定（クラスター再起動時に備えて）
+> docker exec fuse-dev-control-plane systemctl enable containerd-fuse-overlayfs
+> ```
+>
+> この手順を省略すると `hostUsers: false` を持つ Pod が `error mounting sysfs` で失敗する。
 
 ---
 
@@ -317,82 +329,44 @@ kubectl create secret generic ssh-key \
   -n oil-test
 ```
 
-### パターン B: kind 内に簡易 SSHD を立てる
+### パターン B: kind 内に SFTP+chroot SSH サーバーを立てる
 
-SSHD は root で動作する必要があるため、PSS-restricted の `oil-test` ではなく
-`default` namespace（または `fuse-csi-system`）に立てる。
+`csi/test-ssh-server.yaml` で管理される本番相当の SFTP+ChrootDirectory 構成を使う。
+設計詳細は [docs/design-sftp-chroot-ssh-server.md](design-sftp-chroot-ssh-server.md) を参照。
 
 ```bash
 # テスト用 SSH 鍵ペア作成
 ssh-keygen -t ed25519 -f /tmp/sshfs-test-key -N ""
-PUBKEY=$(cat /tmp/sshfs-test-key.pub)
 
-# OpenSSH + SFTP chroot の SSHD Pod を default namespace に起動
-# （root で動作するため PSS-restricted の oil-test には置かない）
-kubectl apply -f - <<EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: sshd-test
-  namespace: default
-spec:
-  containers:
-  - name: sshd
-    image: ubuntu:22.04
-    command:
-    - /bin/bash
-    - -c
-    - |
-      apt-get update -q && apt-get install -y -q openssh-server
-      mkdir -p /var/run/sshd
-      # testuser 作成（ログインシェルなし、パスワード '*' でロック解除）
-      useradd -M -s /bin/false -p '*' testuser
-      # SFTP chroot 用ディレクトリ（/ が chroot root、/upload が書き込み先）
-      mkdir -p /upload && chown testuser:testuser /upload
-      # 公開鍵設定
-      mkdir -p /home/testuser/.ssh
-      echo "\$PUBKEY" > /home/testuser/.ssh/authorized_keys
-      chmod 700 /home/testuser/.ssh && chmod 600 /home/testuser/.ssh/authorized_keys
-      chown -R testuser:testuser /home/testuser/.ssh
-      # SFTP chroot 設定を sshd_config に追加
-      cat >> /etc/ssh/sshd_config <<'SSHD_CONF'
-      Match User testuser
-        ChrootDirectory /
-        ForceCommand internal-sftp
-        X11Forwarding no
-        AllowTcpForwarding no
-      SSHD_CONF
-      exec /usr/sbin/sshd -D -e
-    env:
-    - name: PUBKEY
-      value: "$PUBKEY"
-    ports:
-    - containerPort: 22
-EOF
+# 公開鍵を ConfigMap に登録
+kubectl create configmap sshd-authorized-keys \
+  --from-file=authorized_keys=/tmp/sshfs-test-key.pub \
+  -n default
 
-# SSHD Pod の起動待ち
-kubectl wait --for=condition=Ready pod/sshd-test -n default --timeout=120s
+# SSH サーバー Pod をデプロイ
+kubectl apply -f csi/test-ssh-server.yaml
 
-# SSHD の ClusterIP を取得
-kubectl expose pod sshd-test -n default --port=22 --name=sshd-svc
-SSHD_IP=$(kubectl get svc sshd-svc -n default -o jsonpath='{.spec.clusterIP}')
-echo "SSHD IP: $SSHD_IP"
+# 起動待ち（initContainer がホスト鍵生成 + chroot セットアップを行う）
+kubectl wait --for=condition=Ready pod/ssh-server -n default --timeout=120s
 
-# 接続テスト（CSI driver から sshfs でマウントする前に動作確認）
-# kind ノードのコンテナに入って確認
-docker exec fuse-dev-control-plane \
-  ssh -i /dev/stdin -o StrictHostKeyChecking=accept-new \
-  testuser@$SSHD_IP echo "SSH OK" < /tmp/sshfs-test-key
+# ClusterIP を取得
+SSH_IP=$(kubectl get svc ssh-server -n default -o jsonpath='{.spec.clusterIP}')
+echo "SSH Server IP: $SSH_IP"
+
+# 接続テスト（SFTP のみ; シェルは ForceCommand で拒否される）
+sftp -i /tmp/sshfs-test-key -P 2222 \
+  -o StrictHostKeyChecking=accept-new \
+  testuser@$SSH_IP:/data
 ```
 
 **sshfs の設定値:**
-- `host`: `$SSHD_IP`（上記コマンドで確認）
+- `host`: `$SSH_IP`（上記コマンドで確認）
 - `user`: `testuser`
-- `remotePath`: `/upload`（chroot 内の書き込み可能ディレクトリ）
-- `port`: `22`
+- `remotePath`: `/data`（chroot 内のサブディレクトリ。chroot root `/chroot/testuser` に対応）
+- `port`: `2222`
 
 ```bash
-# Secret 作成（/tmp/sshfs-test-key を使用）
+# Secret 作成（--from-file を使うこと。--from-literal は末尾改行を除去するため SSH 認証エラーになる）
 kubectl create secret generic ssh-key \
   --from-file=private_key=/tmp/sshfs-test-key \
   -n oil-test

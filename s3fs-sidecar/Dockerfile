@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y \
     fuse3 \
     && rm -rf /var/lib/apt/lists/*
 RUN echo "user_allow_other" >> /etc/fuse.conf
+RUN mkdir -p /mnt/fuse && chmod 777 /mnt/fuse
+# uid 1000 のユーザーを作成（Kyverno が runAsUser: 1000 を注入するため）
+RUN useradd -u 1000 -m -s /sbin/nologin appuser
 
 COPY --from=builder /receiver /bin/receiver
 # 本物の fusermount3 を stub に置き換える。

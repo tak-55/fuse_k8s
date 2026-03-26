@@ -18,8 +18,10 @@ func main() {
 	preopenFDStr := os.Getenv("FUSE_PREOPEN_FD")
 
 	if commFDStr == "" || preopenFDStr == "" {
-		fmt.Fprintln(os.Stderr, "fusermount3-stub: _FUSE_COMMFD または FUSE_PREOPEN_FD が未設定")
-		os.Exit(1)
+		// アンマウント呼び出し（fusermount3 -u /mnt/fuse）は _FUSE_COMMFD なしで呼ばれる。
+		// マウントはすでに CSI driver が管理しているため何もせず正常終了する。
+		fmt.Fprintln(os.Stderr, "fusermount3-stub: アンマウント呼び出し（または env 未設定）→ 正常終了")
+		os.Exit(0)
 	}
 
 	commFD, err := strconv.Atoi(commFDStr)

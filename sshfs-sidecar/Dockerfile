@@ -12,6 +12,10 @@ RUN apt-get update && apt-get install -y \
     fuse3 \
     && rm -rf /var/lib/apt/lists/*
 RUN echo "user_allow_other" >> /etc/fuse.conf
+RUN mkdir -p /mnt/fuse && chmod 777 /mnt/fuse
+# OpenSSH クライアントは getpwuid(geteuid()) でユーザーを検索するため
+# uid 1000 のエントリが /etc/passwd にないと "No user exists for uid 1000" で失敗する
+RUN useradd -u 1000 -m -s /bin/bash appuser
 
 COPY --from=builder /receiver /bin/receiver
 COPY --from=builder /fusermount3-stub /usr/bin/fusermount3
