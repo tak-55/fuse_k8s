@@ -66,10 +66,37 @@ metadata:
   name: my-sshfs-pod
   # namespace は自分のテナント namespace に変更
 spec:
+  # securityContext / hostUsers は Kyverno が自動注入するため書かなくてよい
+  initContainers:
+    # /dev/fuse プレースホルダを作成（libfuse の stat チェックを通過させる）
+    - name: create-fuse-device
+      image: busybox:stable
+      command: ["touch", "/fuse-dev/fuse"]
+      volumeMounts:
+        - name: fuse-device
+          mountPath: /fuse-dev
+
+    # sshfs-sidecar: CSI driver から FUSE fd を受け取り sshfs を起動する
+    # restartPolicy: Always → sidecar initContainer（Kubernetes 1.29+）
+    - name: sshfs-sidecar
+      image: ghcr.io/scaleworx-inc/fuse_k8s-sshfs-sidecar:latest
+      restartPolicy: Always
+      readinessProbe:
+        exec:
+          command: ["test", "-f", "/fuse-fd/ready"]
+        initialDelaySeconds: 2
+        periodSeconds: 2
+        failureThreshold: 30
+      volumeMounts:
+        - name: fuse-fd
+          mountPath: /fuse-fd
+        - name: fuse-device
+          mountPath: /dev/fuse
+          subPath: fuse
+
   containers:
     - name: app
       image: ubuntu:22.04
-      # securityContext は書かなくてよい（Kyverno が自動設定する）
       command: ["/bin/sh", "-c"]
       args:
         - |
@@ -93,6 +120,10 @@ spec:
           strictHostKeyCheck: "true"     # 本番は "true" 推奨
         nodePublishSecretRef:
           name: ssh-key                  # Step 2 で作った Secret 名
+    - name: fuse-fd
+      emptyDir: {}
+    - name: fuse-device
+      emptyDir: {}
 
   terminationGracePeriodSeconds: 30
 ```
@@ -144,10 +175,34 @@ kind: Pod
 metadata:
   name: my-s3fs-pod
 spec:
+  # securityContext / hostUsers は Kyverno が自動注入するため書かなくてよい
+  initContainers:
+    - name: create-fuse-device
+      image: busybox:stable
+      command: ["touch", "/fuse-dev/fuse"]
+      volumeMounts:
+        - name: fuse-device
+          mountPath: /fuse-dev
+
+    - name: s3fs-sidecar
+      image: ghcr.io/scaleworx-inc/fuse_k8s-s3fs-sidecar:latest
+      restartPolicy: Always
+      readinessProbe:
+        exec:
+          command: ["test", "-f", "/fuse-fd/ready"]
+        initialDelaySeconds: 2
+        periodSeconds: 2
+        failureThreshold: 30
+      volumeMounts:
+        - name: fuse-fd
+          mountPath: /fuse-fd
+        - name: fuse-device
+          mountPath: /dev/fuse
+          subPath: fuse
+
   containers:
     - name: app
       image: ubuntu:22.04
-      # securityContext は書かなくてよい（Kyverno が自動設定する）
       command: ["/bin/sh", "-c"]
       args:
         - |
@@ -169,6 +224,10 @@ spec:
           noCheckCert: "false"                       # 自己署名証明書環境では "true"
         nodePublishSecretRef:
           name: s3-credentials
+    - name: fuse-fd
+      emptyDir: {}
+    - name: fuse-device
+      emptyDir: {}
 
   terminationGracePeriodSeconds: 30
 ```
@@ -200,6 +259,28 @@ spec:
       labels:
         app: my-app
     spec:
+      initContainers:
+        - name: create-fuse-device
+          image: busybox:stable
+          command: ["touch", "/fuse-dev/fuse"]
+          volumeMounts:
+            - name: fuse-device
+              mountPath: /fuse-dev
+        - name: sshfs-sidecar
+          image: ghcr.io/scaleworx-inc/fuse_k8s-sshfs-sidecar:latest
+          restartPolicy: Always
+          readinessProbe:
+            exec:
+              command: ["test", "-f", "/fuse-fd/ready"]
+            initialDelaySeconds: 2
+            periodSeconds: 2
+            failureThreshold: 30
+          volumeMounts:
+            - name: fuse-fd
+              mountPath: /fuse-fd
+            - name: fuse-device
+              mountPath: /dev/fuse
+              subPath: fuse
       containers:
         - name: app
           image: ubuntu:22.04
@@ -224,6 +305,10 @@ spec:
               strictHostKeyCheck: "true"
             nodePublishSecretRef:
               name: ssh-key
+        - name: fuse-fd
+          emptyDir: {}
+        - name: fuse-device
+          emptyDir: {}
       terminationGracePeriodSeconds: 30
 ```
 

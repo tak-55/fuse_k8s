@@ -77,12 +77,13 @@ Kubernetes クラスターを Capsule + Kyverno によるマルチテナント�
 │  │  (管理者管理)          │   │  (PSS restricted)            │   │
 │  │                       │   │                              │   │
 │  │  fuse-csi-driver      │   │  User Pod                    │   │
-│  │  DaemonSet            │◄──┤  - app コンテナ              │   │
-│  │  (privileged: true)   │   │    UID: 1000 (Kyverno注入)   │   │
-│  │                       │   │    /data ← FUSE マウント      │   │
-│  │  NodePublishVolume()  │   │  - sidecar 不要              │   │
-│  │  → sshfs/s3fs 起動    │   │  - privileged: false         │   │
-│  │  → targetPath にmt    │   │  - hostUsers: false          │   │
+│  │  DaemonSet            │◄──┤  - sshfs/s3fs-sidecar        │   │
+│  │  (privileged: true)   │   │    (sidecar initContainer)   │   │
+│  │                       │   │    fd-passing で FUSE 提供   │   │
+│  │  NodePublishVolume()  │   │  - app コンテナ              │   │
+│  │  → /dev/fuse open     │   │    UID: 1000 (Kyverno注入)   │   │
+│  │  → mount(2)           │   │    /data ← FUSE マウント      │   │
+│  │  → UDS で fd 送信     │   │  - hostUsers: false          │   │
 │  └───────────────────────┘   └──────────────────────────────┘   │
 │           ↑                                ↑                     │
 │    CSI NodePublishVolume           kubelet bind-mount            │
@@ -94,7 +95,7 @@ Kubernetes クラスターを Capsule + Kyverno によるマルチテナント�
 
 | 項目 | 現行（sidecar 方式） | 新方式（CSI 内蔵） |
 |------|--------------------|--------------------|
-| ユーザー Pod sidecar | `privileged: true` 必須 | **不要** |
+| ユーザー Pod sidecar | `privileged: true` 必須 | **sshfs/s3fs-sidecar（非特権）** |
 | ユーザー Pod securityContext | 手動設定 | **Kyverno が自動注入** |
 | `hostUsers: false` | なし | **Kyverno が自動強制** |
 | PSS restricted | ❌ 不可 | ✅ 準拠 |
@@ -123,11 +124,18 @@ kubelet が NodePublishVolume を CSI DaemonSet に要求
   - secrets: {private_key} or {access_key, secret_key}
     │
     ▼
-fuse-csi-driver (NodePublishVolume)
-  - 認証情報を一時ファイルに書き出す
-  - sshfs / s3fs を -f (フォアグラウンド) で起動
-  - waitForMount() でマウント完了を確認
-  - mounts[targetPath] = {pid, keyFile} で追跡
+fuse-csi-driver (NodePublishVolume) ← fd-passing 方式
+  - open("/dev/fuse") → fusefd 取得
+  - mount(fusefd, targetPath, "fuse", ...) でマウントポイント確保
+  - emptyDir に params.json（接続パラメータ）を書き出す
+  - UDS サーバーを起動（emptyDir/csi.sock）
+    │
+    ▼
+sshfs/s3fs-sidecar（sidecar initContainer）が UDS に接続
+  - params.json を読み込み（接続先情報）
+  - SCM_RIGHTS で fusefd + 認証情報 JSON を受信
+  - sshfs/s3fs を FUSE_PREOPEN_FD=<fusefd> で起動
+  - /fuse-fd/ready を書き込み → readinessProbe 通過
     │
     ▼
 kubelet が targetPath をユーザー Pod にバインドマウント
@@ -137,8 +145,8 @@ kubelet が targetPath をユーザー Pod にバインドマウント
     ▼
 Pod 削除時
   - NodeUnpublishVolume を呼び出し
-  - fusermount3 -u targetPath でアンマウント
-  - sshfs/s3fs プロセスを SIGKILL で停止
+  - UDS サーバー停止 → fusefd close → FUSE デーモン終了
+  - umount2(targetPath, MNT_DETACH) でアンマウント
   - 一時ファイルを削除
 ```
 
@@ -160,7 +168,8 @@ fuse-csi-driver/
 │   └── driver/
 │       ├── driver.go     # Driver 型、gRPC サーバー起動
 │       ├── identity.go   # CSI Identity サービス
-│       ├── node.go       # CSI Node サービス（主要ロジック）
+│       ├── node.go       # CSI Node サービス（NodePublishVolume/NodeUnpublishVolume）
+│       ├── fdpassing.go  # fd-passing: /dev/fuse open + mount + UDS サーバー
 │       ├── sshfs.go      # sshfs マウント処理
 │       └── s3fs.go       # s3fs マウント処理
 ├── go.mod
@@ -189,8 +198,8 @@ type Driver struct {
 }
 
 type mountInfo struct {
-    pid       int
-    keyFile   string     // 一時認証情報ファイル（クリーンアップ用）
+    fusefd    int        // /dev/fuse ファイルディスクリプタ（close でサイドカー終了）
+    stopFn    func()     // UDS サーバー停止関数
     fsType    string     // "sshfs" or "s3fs"
     mountedAt time.Time
 }
@@ -293,8 +302,10 @@ volumes:
 **sshfs 用**:
 
 ```bash
+# 注意: --from-file を使うこと。--from-literal はシェル展開で末尾改行を除去するため
+#        OpenSSH が "error in libcrypto" で鍵を読み込めない。
 kubectl create secret generic ssh-key \
-  --from-literal=private_key="$(cat ~/.ssh/id_ed25519)" \
+  --from-file=private_key=~/.ssh/id_ed25519 \
   -n <tenant-namespace>
 ```
 
