@@ -29,20 +29,20 @@ Expected output:
 
 4) Functional pod state
 Command:
-  kubectl --kubeconfig $KCFG -n fuse-test-ns get pod sshfs-fdpass-test s3fs-fdpass-test -o wide
+  kubectl --kubeconfig $KCFG -n fuse-test-ns get pod sshfs-example s3fs-example -o wide
 Expected output:
   - both pods are 2/2 Running
 
 5) sshfs functional verification
 Command:
-  kubectl --kubeconfig $KCFG -n fuse-test-ns logs sshfs-fdpass-test -c app
+  kubectl --kubeconfig $KCFG -n fuse-test-ns logs sshfs-example -c app
 Expected output contains:
   - /dev/fuse on /data type fuse
   - 書き込み成功！
 
 6) s3fs functional verification
 Command:
-  kubectl --kubeconfig $KCFG -n fuse-test-ns logs s3fs-fdpass-test -c app
+  kubectl --kubeconfig $KCFG -n fuse-test-ns logs s3fs-example -c app
 Expected output contains:
   - /dev/fuse on /data type fuse
   - 書き込み成功！
@@ -55,8 +55,8 @@ Expected output:
 
 8) Security context check on test pods
 Command:
-  kubectl --kubeconfig $KCFG -n fuse-test-ns get pod sshfs-fdpass-test -o jsonpath='podSC.runAsNonRoot={.spec.securityContext.runAsNonRoot}{"\n"}podSC.runAsUser={.spec.securityContext.runAsUser}{"\n"}podSC.seccomp={.spec.securityContext.seccompProfile.type}{"\n"}'
-  kubectl --kubeconfig $KCFG -n fuse-test-ns get pod s3fs-fdpass-test -o jsonpath='podSC.runAsNonRoot={.spec.securityContext.runAsNonRoot}{"\n"}podSC.runAsUser={.spec.securityContext.runAsUser}{"\n"}podSC.seccomp={.spec.securityContext.seccompProfile.type}{"\n"}'
+  kubectl --kubeconfig $KCFG -n fuse-test-ns get pod sshfs-example -o jsonpath='podSC.runAsNonRoot={.spec.securityContext.runAsNonRoot}{"\n"}podSC.runAsUser={.spec.securityContext.runAsUser}{"\n"}podSC.seccomp={.spec.securityContext.seccompProfile.type}{"\n"}'
+  kubectl --kubeconfig $KCFG -n fuse-test-ns get pod s3fs-example -o jsonpath='podSC.runAsNonRoot={.spec.securityContext.runAsNonRoot}{"\n"}podSC.runAsUser={.spec.securityContext.runAsUser}{"\n"}podSC.seccomp={.spec.securityContext.seccompProfile.type}{"\n"}'
 Expected output:
   - runAsNonRoot=true
   - runAsUser=1000

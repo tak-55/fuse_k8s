@@ -331,7 +331,7 @@ kubectl create secret generic ssh-key \
 
 ### パターン B: kind 内に SFTP+chroot SSH サーバーを立てる
 
-`csi/test-ssh-server.yaml` で管理される本番相当の SFTP+ChrootDirectory 構成を使う。
+`tests/test-ssh-server.yaml` で管理される本番相当の SFTP+ChrootDirectory 構成を使う。
 設計詳細は [docs/design-sftp-chroot-ssh-server.md](design-sftp-chroot-ssh-server.md) を参照。
 
 ```bash
@@ -344,7 +344,7 @@ kubectl create configmap sshd-authorized-keys \
   -n default
 
 # SSH サーバー Pod をデプロイ
-kubectl apply -f csi/test-ssh-server.yaml
+kubectl apply -f tests/test-ssh-server.yaml
 
 # 起動待ち（initContainer がホスト鍵生成 + chroot セットアップを行う）
 kubectl wait --for=condition=Ready pod/ssh-server -n default --timeout=120s
@@ -392,7 +392,7 @@ kubectl create secret generic ssh-key \
 
 ```bash
 # fd-passing 用マニフェストをコピーして編集
-cp sshfs/deploy-kind-fdpass.yaml /tmp/sshfs-test.yaml
+cp sshfs/deploy-kind.yaml /tmp/sshfs-test.yaml
 
 # host / user / remotePath を実環境に合わせて編集
 vi /tmp/sshfs-test.yaml

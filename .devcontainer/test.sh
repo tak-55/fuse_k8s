@@ -102,7 +102,7 @@ kubectl create secret generic s3-credentials \
   -n "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
 # Pod デプロイ（MinIO エンドポイントに合わせて上書き）
-cat "${REPO_ROOT}/s3fs/deploy-kind-fdpass.yaml" \
+cat "${REPO_ROOT}/s3fs/deploy-kind.yaml" \
   | sed 's|your-bucket|test-bucket|g' \
   | sed 's|http://your-s3-endpoint:9000|http://minio.default.svc.cluster.local:9000|g' \
   | sed 's|noCheckCert: "false"|noCheckCert: "true"|g' \

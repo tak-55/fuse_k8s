@@ -1,0 +1,14 @@
+# =============================================================================
+# sshfs ConfigMap テンプレート（環境固有値は別ファイルで管理）
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sshfs-config
+data:
+  SSHFS_HOST: "your-ssh-host"
+  SSHFS_USER: "your-user"
+  SSHFS_REMOTE_PATH: "/data"
+  SSHFS_PORT: "22"
+  USE_LOCAL_SSHD: "false"
+  SSHFS_STRICT_HOST_KEY_CHECK: "accept-new"

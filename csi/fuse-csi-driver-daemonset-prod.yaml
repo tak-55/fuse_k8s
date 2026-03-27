@@ -1,8 +1,8 @@
 # =============================================================================
 # fuse-csi-driver: ServiceAccount + DaemonSet（kubeadm 本番環境版）
 #
-# kubelet データディレクトリ: /var/lib/kubelet（kubeadm デフォルト）
-# RKE2 環境の場合は fuse-csi-driver-daemonset-rke2.yaml を使用すること。
+# kubelet データディレクトリ: /var/lib/kubelet
+# （このリポジトリでは production 用マニフェストを共通利用）
 #
 # ghcr.io のイメージを使用。main ブランチへの push で自動ビルドされる。
 #

@@ -260,7 +260,7 @@ initContainers:
 
 ### 7.1 SSH サーバー Pod
 
-`csi/test-ssh-server.yaml` として管理する（→ セクション 8 参照）。
+`tests/test-ssh-server.yaml` として管理する（→ セクション 8 参照）。
 
 デプロイ手順:
 ```bash
@@ -271,7 +271,7 @@ ssh-keygen -t ed25519 -f /tmp/test-sshkey -N ""
 kubectl create configmap sshd-authorized-keys \
   --from-file=authorized_keys=/tmp/test-sshkey.pub \
   -n default
-kubectl apply -f csi/test-ssh-server.yaml
+kubectl apply -f tests/test-ssh-server.yaml
 
 # 3. 秘密鍵を テナント namespace の Secret に登録
 kubectl create secret generic ssh-key \
@@ -279,7 +279,7 @@ kubectl create secret generic ssh-key \
   -n test-tenant-ns
 
 # 4. テスト Pod デプロイ
-kubectl apply -f sshfs/deploy-kind-fdpass.yaml -n test-tenant-ns
+kubectl apply -f sshfs/deploy-kind.yaml -n test-tenant-ns
 ```
 
 ### 7.2 期待される動作確認
@@ -302,9 +302,9 @@ kubectl exec <pod> -n test-tenant-ns -c app -- sh -c 'echo test > /data/hello.tx
 
 | ファイル | 説明 |
 |----------|------|
-| `csi/test-ssh-server.yaml` | テスト用 SSH サーバー（SFTP + chroot）の K8s マニフェスト |
-| `sshfs/deploy-kind-fdpass.yaml` | fd-passing + sshfs-sidecar のテスト Pod |
-| `sshfs/deploy-kind-fdpass.yaml` | fd-passing + sshfs-sidecar のテスト Pod（kind 用） |
+| `tests/test-ssh-server.yaml` | テスト用 SSH サーバー（SFTP + chroot）の K8s マニフェスト |
+| `sshfs/deploy-kind.yaml` | fd-passing + sshfs-sidecar のテスト Pod |
+| `sshfs/deploy-kind.yaml` | fd-passing + sshfs-sidecar のテスト Pod（kind 用） |
 | `sshfs-sidecar/receiver/main.go` | sshfs-sidecar のエントリポイント |
 | `sshfs-sidecar/fusermount3-stub/main.go` | libfuse の fusermount3 インターセプト |
 | `fuse-csi-driver/pkg/driver/fdpassing.go` | fd-passing の CSI driver 側実装 |

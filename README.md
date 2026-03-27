@@ -1,14 +1,7 @@
 # Kubernetes FUSE マウント（PSS Restricted 対応）
 
 Kubernetes Pod 内で sshfs・s3fs をマウントするための **CSI ドライバー実装**です。
-独自の **fd-passing アーキテクチャ** により、ユーザー Pod が一切の特権を必要とせず、[Pod Security Standards (PSS) restricted](https://kubernetes.io/docs/concepts/security/pod-security-standards/) に完全準拠したまま FUSE マウントを実現します。
-
-## 対象環境
-
-| 環境 | 構成 |
-|------|------|
-| **開発** | kind（devcontainer） |
-| **本番** | Rancher で構築した RKE2、Capsule + Kyverno マルチテナント |
+ユーザー Pod が一切の特権を必要とせず、[Pod Security Standards (PSS) restricted](https://kubernetes.io/docs/concepts/security/pod-security-standards/) に完全準拠したまま FUSE マウントを実現します。
 
 ## サポートするファイルシステム
 
@@ -94,14 +87,12 @@ tak_fuse_k8s/
 │   └── fusermount3-stub/     # libfuse マウント呼び出し横取り
 ├── csi/                      # CSI ドライバー用 Kubernetes マニフェスト
 │   ├── fuse-csi-driver.yaml                # Namespace + CSIDriver
-│   ├── fuse-csi-driver-daemonset.yaml      # kind / devcontainer 用
-│   ├── fuse-csi-driver-daemonset-prod.yaml # RKE2 / kubeadm 用
-│   └── fuse-csi-driver-daemonset-k3s.yaml  # k3s 用
+│   └── fuse-csi-driver-daemonset-prod.yaml # production 用（/var/lib/kubelet）
 ├── sshfs/                    # sshfs ユーザー Pod サンプル
 ├── s3fs/                     # s3fs ユーザー Pod サンプル
 ├── policy/                   # Capsule テナント・Kyverno ポリシー定義
 ├── docs/                     # 設計・運用ガイド
-└── old/                      # 旧アーキテクチャ（参照用・非推奨）
+└── tests/                    # テスト用マニフェスト・手順
 ```
 
 ---
@@ -116,17 +107,8 @@ CSI ドライバーのデプロイはクラスター管理者が行います。�
 kubectl apply -f csi/fuse-csi-driver.yaml
 ```
 
-クラスター種別に応じて DaemonSet マニフェストを選択してください：
-
 ```bash
-# kind / devcontainer
-kubectl apply -f csi/fuse-csi-driver-daemonset.yaml
-
-# RKE2（Rancher 構築）/ kubeadm
 kubectl apply -f csi/fuse-csi-driver-daemonset-prod.yaml
-
-# k3s
-kubectl apply -f csi/fuse-csi-driver-daemonset-k3s.yaml
 ```
 
 ```bash
@@ -171,10 +153,10 @@ kubectl create secret generic s3-credentials \
 
 ```bash
 # sshfs
-kubectl apply -f sshfs/deploy-kind-fdpass.yaml -n <your-namespace>
+kubectl apply -f sshfs/deploy.yaml -n <your-namespace>
 
 # s3fs
-kubectl apply -f s3fs/deploy-kind-fdpass.yaml -n <your-namespace>
+kubectl apply -f s3fs/deploy.yaml -n <your-namespace>
 ```
 
 マニフェスト内の `volumeAttributes`（`host`、`user`、`remotePath`、`bucket` 等）を環境に合わせて変更してください。
@@ -192,31 +174,6 @@ kubectl apply -f s3fs/deploy-kind-fdpass.yaml -n <your-namespace>
 | **対応ストレージ** | SSH サーバー | AWS S3, MinIO, Ceph 等 |
 | **Secret キー** | `private_key` | `access_key`, `secret_key` |
 | **主な volumeAttributes** | `host`, `user`, `remotePath`, `port` | `bucket`, `endpoint`, `region` |
-
----
-
-## 開発（kind 環境）
-
-```bash
-# クラスター作成
-kind create cluster --name fuse-dev --config .devcontainer/kind-config.yaml
-
-# イメージのビルドと kind へのロード
-cd fuse-csi-driver && docker build -t fuse-csi-driver:latest . && cd ..
-docker build -t sshfs-sidecar:latest ./sshfs-sidecar/
-docker build -t s3fs-sidecar:latest ./s3fs-sidecar/
-kind load docker-image fuse-csi-driver:latest sshfs-sidecar:latest s3fs-sidecar:latest --name fuse-dev
-
-# ユニットテスト
-cd fuse-csi-driver && go test ./pkg/driver/...
-go test ./pkg/driver/ -run TestMountSshfs_MissingHost  # 単一テスト
-
-# 統合テスト（fd-passing 動作確認）
-.devcontainer/test-fdpass.sh
-
-# クラスター削除
-kind delete cluster --name fuse-dev
-```
 
 ---
 

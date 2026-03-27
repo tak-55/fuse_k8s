@@ -10,7 +10,7 @@
 #   bucket: test-bucket
 #
 # セットアップ:
-#   kubectl apply -f csi/test-minio.yaml
+#   kubectl apply -f tests/test-minio.yaml
 #   # バケット作成（MinIO Pod起動後）
 #   kubectl exec -n default minio -- mc alias set local http://localhost:9000 minioadmin minioadmin
 #   kubectl exec -n default minio -- mc mb local/test-bucket
