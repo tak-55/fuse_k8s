@@ -63,8 +63,8 @@ entrypoint.sh:
 
 **変更内容**:
 
-- `csi/csi-driver.yaml`: Namespace (`mfcp-system`) + CSIDriver リソース定義
-- `csi/csi-driver-daemonset.yaml`: DaemonSet + RBAC（pods の get/list/watch、events の create/patch 権限）
+- `csi/fuse-csi-driver.yaml`: Namespace (`fuse-csi-system`) + CSIDriver リソース定義
+- `csi/fuse-csi-driver-daemonset.yaml`: DaemonSet + RBAC（pods の get/list/watch、events の create/patch 権限）
 - CSI ドライバーコンテナに加え `node-driver-registrar` (v2.10.0) を含む2コンテナ構成
 - master/control-plane ノードへの tolerations を設定しています
 
@@ -207,11 +207,11 @@ Unix Domain Socket (UDS) のソケットパスを `FUSERMOUNT3PROXY_FDPASSING_SO
 | 1 | K8s バージョン要件の引き上げ（v1.29+） | `sshfs/deploy-kind.yaml`, `sshfs/deploy.yaml`, `s3fs/deploy-kind.yaml`, `s3fs/deploy.yaml` |
 | 2 | Native sidecar 方式の採用 | `sshfs/deploy-kind.yaml`, `sshfs/deploy.yaml`, `s3fs/deploy-kind.yaml`, `s3fs/deploy.yaml` |
 | 3 | fusermount3-proxy のみ採用 | `sshfs-sidecar/*`, `s3fs-sidecar/*` |
-| 4 | CSI マニフェストの独自管理 | `csi/csi-driver.yaml`, `csi/csi-driver-daemonset.yaml` |
+| 4 | CSI マニフェストの独自管理 | `csi/fuse-csi-driver.yaml`, `csi/fuse-csi-driver-daemonset.yaml` |
 | 5 | 対象を sshfs・s3fs に限定 | `sshfs/`, `s3fs/` |
 | 6 | 独自イメージビルド + CI/CD | `*/Dockerfile`, `.github/workflows/docker-image.yml` |
 | 7 | Secret による認証情報管理 | `*/deploy-kind.yaml`, `*/deploy.yaml` |
 | 8 | CSI ボリューム属性の明示化 | `*/deploy-kind.yaml`, `*/deploy.yaml` |
-| 9 | セキュリティコンテキストの明示設定 | `*/deploy-kind.yaml`, `*/deploy.yaml`, `csi/csi-driver-daemonset.yaml` |
-| 10 | 全コンテナへのリソース制限追加 | `*/deploy-kind.yaml`, `*/deploy.yaml`, `csi/csi-driver-daemonset.yaml` |
+| 9 | セキュリティコンテキストの明示設定 | `*/deploy-kind.yaml`, `*/deploy.yaml`, `csi/fuse-csi-driver-daemonset.yaml` |
+| 10 | 全コンテナへのリソース制限追加 | `*/deploy-kind.yaml`, `*/deploy.yaml`, `csi/fuse-csi-driver-daemonset.yaml` |
 | 11 | ConfigMap による環境固有値の外出し | `*/configmap.example.yaml`, `*/deploy-kind.yaml`, `*/deploy.yaml` |

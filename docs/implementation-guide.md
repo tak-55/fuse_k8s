@@ -206,8 +206,8 @@ kubectl cluster-info --context kind-fuse-dev
 すべての FUSE 実装で共通です（クラスターにつき1回のみ）。
 
 ```bash
-kubectl apply -f csi/csi-driver.yaml
-kubectl apply -f csi/csi-driver-daemonset.yaml
+kubectl apply -f csi/fuse-csi-driver.yaml
+kubectl apply -f csi/fuse-csi-driver-daemonset.yaml
 ```
 
 ## デプロイの確認

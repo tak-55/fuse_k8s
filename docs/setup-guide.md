@@ -50,8 +50,8 @@ cd fuse_k8s
 すべての FUSE 実装で共通の CSI ドライバーをデプロイします（クラスターにつき1回のみ）。
 
 ```bash
-kubectl apply -f csi/csi-driver.yaml
-kubectl apply -f csi/csi-driver-daemonset.yaml
+kubectl apply -f csi/fuse-csi-driver.yaml
+kubectl apply -f csi/fuse-csi-driver-daemonset.yaml
 ```
 
 適用後の出力例：
