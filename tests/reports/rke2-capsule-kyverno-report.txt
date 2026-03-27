@@ -1,0 +1,29 @@
+# RKE2 Capsule+Kyverno Test Report
+Generated: 2026-03-27T07:59:20Z
+
+## Summary
+- Capsule install: PASS
+- Kyverno install: PASS
+- CSI DaemonSet ready: PASS
+- Positive mutation (secureContext + hostUsers): PASS
+- Negative test privileged denied: PASS
+- Negative test hostPath denied: PASS
+- FUSE CSI precondition (hostUsers skipped): PASS
+
+## Evidence
+### Positive pod fields
+      allowPrivilegeEscalation: false
+      capabilities:
+  hostUsers: false
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+
+### Negative privileged output
+The Pod "pss-negative-priv" is invalid: spec.containers[0].securityContext: Invalid value: core.SecurityContext{Capabilities:(*core.Capabilities)(0xc033476ae0), Privileged:(*bool)(0xc02c60bd23), SELinuxOptions:(*core.SELinuxOptions)(nil), WindowsOptions:(*core.WindowsSecurityContextOptions)(nil), RunAsUser:(*int64)(nil), RunAsGroup:(*int64)(nil), RunAsNonRoot:(*bool)(nil), ReadOnlyRootFilesystem:(*bool)(nil), AllowPrivilegeEscalation:(*bool)(0xc02c60bd0f), ProcMount:(*core.ProcMountType)(nil), SeccompProfile:(*core.SeccompProfile)(nil), AppArmorProfile:(*core.AppArmorProfile)(nil)}: cannot set `allowPrivilegeEscalation` to false and `privileged` to true
+
+### Negative hostPath output
+Error from server (Forbidden): error when creating "/tmp/rke2-neg-hostpath.yaml": pods "pss-negative-hostpath" is forbidden: violates PodSecurity "restricted:latest": restricted volume types (volume "hp" uses restricted volume type "hostPath")
+
+### FUSE precondition pod fields
+      driver: fuse.csi.fuse-k8s.io
