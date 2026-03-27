@@ -63,9 +63,8 @@ spec:
         - key: node-role.kubernetes.io/control-plane
           operator: Exists
           effect: NoSchedule
-      # プライベートリポジトリを使用する場合はコメントを外す
-      # imagePullSecrets:
-      #   - name: ghcr-secret
+      imagePullSecrets:
+        - name: ghcr-secret
       containers:
         # -----------------------------------------------------------------------
         # fuse-csi-driver: sshfs/s3fs を起動し NodePublishVolume を処理する
@@ -139,7 +138,7 @@ spec:
         - name: registration-dir
           hostPath:
             path: /var/lib/rancher/rke2/agent/kubelet/plugins_registry
-            type: Directory
+            type: DirectoryOrCreate
         # kubelet ディレクトリ（NodePublishVolume の targetPath を含む）
         - name: kubelet-dir
           hostPath:

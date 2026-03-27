@@ -1,0 +1,111 @@
+RKE2 fd-passing Manual Verification Procedure
+
+kubeconfig:
+  /home/ubuntu/project/rahcner/cluster_fuse-test/kubeconfig.yaml
+
+Set env:
+  export KCFG=/home/ubuntu/project/rahcner/cluster_fuse-test/kubeconfig.yaml
+
+1) Cluster readiness
+Command:
+  kubectl --kubeconfig $KCFG get nodes -o wide
+Expected output:
+  - rke2-worker01, rkw2-worker02 are Ready
+
+2) CSI driver health
+Command:
+  kubectl --kubeconfig $KCFG -n fuse-csi-system get ds fuse-csi-driver -o wide
+  kubectl --kubeconfig $KCFG -n fuse-csi-system get pods -l app=fuse-csi-driver -o wide
+Expected output:
+  - DaemonSet READY equals number of workers (2)
+  - each pod is 2/2 Running
+
+3) CSINode registration
+Command:
+  kubectl --kubeconfig $KCFG get csinode rke2-worker01 -o yaml | grep fuse.csi.fuse-k8s.io
+  kubectl --kubeconfig $KCFG get csinode rkw2-worker02 -o yaml | grep fuse.csi.fuse-k8s.io
+Expected output:
+  - driver name fuse.csi.fuse-k8s.io appears on both nodes
+
+4) Functional pod state
+Command:
+  kubectl --kubeconfig $KCFG -n fuse-test-ns get pod sshfs-fdpass-test s3fs-fdpass-test -o wide
+Expected output:
+  - both pods are 2/2 Running
+
+5) sshfs functional verification
+Command:
+  kubectl --kubeconfig $KCFG -n fuse-test-ns logs sshfs-fdpass-test -c app
+Expected output contains:
+  - /dev/fuse on /data type fuse
+  - 書き込み成功！
+
+6) s3fs functional verification
+Command:
+  kubectl --kubeconfig $KCFG -n fuse-test-ns logs s3fs-fdpass-test -c app
+Expected output contains:
+  - /dev/fuse on /data type fuse
+  - 書き込み成功！
+
+7) Security baseline label check
+Command:
+  kubectl --kubeconfig $KCFG get ns fuse-test-ns -o jsonpath='{.metadata.labels}'
+Expected output:
+  - includes pod-security.kubernetes.io/enforce=restricted
+
+8) Security context check on test pods
+Command:
+  kubectl --kubeconfig $KCFG -n fuse-test-ns get pod sshfs-fdpass-test -o jsonpath='podSC.runAsNonRoot={.spec.securityContext.runAsNonRoot}{"\n"}podSC.runAsUser={.spec.securityContext.runAsUser}{"\n"}podSC.seccomp={.spec.securityContext.seccompProfile.type}{"\n"}'
+  kubectl --kubeconfig $KCFG -n fuse-test-ns get pod s3fs-fdpass-test -o jsonpath='podSC.runAsNonRoot={.spec.securityContext.runAsNonRoot}{"\n"}podSC.runAsUser={.spec.securityContext.runAsUser}{"\n"}podSC.seccomp={.spec.securityContext.seccompProfile.type}{"\n"}'
+Expected output:
+  - runAsNonRoot=true
+  - runAsUser=1000
+  - seccomp=RuntimeDefault
+
+9) Negative test A (privileged pod should FAIL)
+Command:
+  cat <<'YAML' | kubectl --kubeconfig $KCFG apply --dry-run=server -f -
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    name: sec-neg-privileged
+    namespace: fuse-test-ns
+  spec:
+    containers:
+      - name: c
+        image: busybox:stable
+        command: ["sh","-c","sleep 30"]
+        securityContext:
+          privileged: true
+  YAML
+Expected output:
+  - rejected (Forbidden or validation error), non-zero exit
+
+10) Negative test B (hostPath should FAIL)
+Command:
+  cat <<'YAML' | kubectl --kubeconfig $KCFG apply --dry-run=server -f -
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    name: sec-neg-hostpath
+    namespace: fuse-test-ns
+  spec:
+    containers:
+      - name: c
+        image: busybox:stable
+        command: ["sh","-c","sleep 30"]
+        volumeMounts:
+          - name: hp
+            mountPath: /host
+    volumes:
+      - name: hp
+        hostPath:
+          path: /etc
+          type: Directory
+  YAML
+Expected output:
+  - Forbidden: violates PodSecurity restricted (hostPath), non-zero exit
+
+Pass criteria:
+  - Steps 1-8 match expected outputs
+  - Steps 9-10 fail as expected

@@ -1,0 +1,110 @@
+RKE2 Test Environment Quick Install / Uninstall Guide
+
+Target kubeconfig:
+  /home/ubuntu/project/rahcner/cluster_fuse-test/kubeconfig.yaml
+
+Set env:
+  export KCFG=/home/ubuntu/project/rahcner/cluster_fuse-test/kubeconfig.yaml
+  cd /home/ubuntu/project/tak_fuse_k8s
+
+==================================================
+Install (Quick)
+==================================================
+
+1) Pre-check
+Command:
+  kubectl --kubeconfig $KCFG get nodes -o wide
+Expected:
+  - All target nodes are Ready
+
+2) Deploy CSI resources
+Command:
+  kubectl --kubeconfig $KCFG apply -f csi/fuse-csi-driver.yaml
+
+  # RKE2 cluster that uses /var/lib/kubelet:
+  kubectl --kubeconfig $KCFG apply -f csi/fuse-csi-driver-daemonset-prod.yaml
+
+  # If your RKE2 uses /var/lib/rancher/rke2/agent/kubelet instead, use this:
+  # kubectl --kubeconfig $KCFG apply -f csi/fuse-csi-driver-daemonset-rke2.yaml
+
+3) Wait for CSI readiness
+Command:
+  kubectl --kubeconfig $KCFG -n fuse-csi-system rollout status ds/fuse-csi-driver --timeout=300s
+  kubectl --kubeconfig $KCFG -n fuse-csi-system get pods -l app=fuse-csi-driver -o wide
+Expected:
+  - DaemonSet pods are 2/2 Running on worker nodes
+
+4) Confirm CSINode registration
+Command:
+  kubectl --kubeconfig $KCFG get csinode rke2-worker01 -o yaml | grep fuse.csi.fuse-k8s.io
+  kubectl --kubeconfig $KCFG get csinode rkw2-worker02 -o yaml | grep fuse.csi.fuse-k8s.io
+Expected:
+  - driver fuse.csi.fuse-k8s.io appears on each worker
+
+5) Deploy test workloads
+Command:
+  kubectl --kubeconfig $KCFG apply -f csi/test-ssh-server.yaml
+  kubectl --kubeconfig $KCFG apply -f csi/test-minio.yaml
+  kubectl --kubeconfig $KCFG apply -f sshfs/test-deploy-rke2.yaml
+  kubectl --kubeconfig $KCFG apply -f s3fs/test-deploy-rke2.yaml
+
+6) Verify functional tests
+Command:
+  kubectl --kubeconfig $KCFG -n fuse-test-ns wait --for=condition=Ready pod/sshfs-fdpass-test --timeout=180s
+  kubectl --kubeconfig $KCFG -n fuse-test-ns wait --for=condition=Ready pod/s3fs-fdpass-test --timeout=180s
+  kubectl --kubeconfig $KCFG -n fuse-test-ns logs sshfs-fdpass-test -c app | tail -n 20
+  kubectl --kubeconfig $KCFG -n fuse-test-ns logs s3fs-fdpass-test -c app | tail -n 20
+Expected:
+  - /dev/fuse on /data type fuse
+  - 書き込み成功！
+
+7) Verify security baseline (quick)
+Command:
+  kubectl --kubeconfig $KCFG get ns fuse-test-ns -o jsonpath='{.metadata.labels}' ; echo
+Expected:
+  - includes pod-security.kubernetes.io/enforce=restricted
+
+==================================================
+Uninstall (Quick)
+==================================================
+
+1) Remove functional test pods
+Command:
+  kubectl --kubeconfig $KCFG -n fuse-test-ns delete pod sshfs-fdpass-test s3fs-fdpass-test --ignore-not-found=true
+
+2) Remove test backend services
+Command:
+  kubectl --kubeconfig $KCFG delete -f csi/test-ssh-server.yaml --ignore-not-found=true
+  kubectl --kubeconfig $KCFG delete -f csi/test-minio.yaml --ignore-not-found=true
+
+3) Remove CSI DaemonSet + CSIDriver
+Command:
+  kubectl --kubeconfig $KCFG delete -f csi/fuse-csi-driver-daemonset-prod.yaml --ignore-not-found=true
+  kubectl --kubeconfig $KCFG delete -f csi/fuse-csi-driver-daemonset-rke2.yaml --ignore-not-found=true
+  kubectl --kubeconfig $KCFG delete -f csi/fuse-csi-driver.yaml --ignore-not-found=true
+
+4) Post-uninstall checks
+Command:
+  kubectl --kubeconfig $KCFG -n fuse-csi-system get pods
+  kubectl --kubeconfig $KCFG get csidriver fuse.csi.fuse-k8s.io
+Expected:
+  - fuse-csi-system pods: none
+  - csidriver query: NotFound
+
+Optional cleanup (if this is only a disposable test env)
+Command:
+  kubectl --kubeconfig $KCFG -n fuse-test-ns delete secret ssh-key s3-credentials ghcr-secret --ignore-not-found=true
+
+==================================================
+Troubleshooting quick checks
+==================================================
+
+- If test pods are stuck at Init/Pending:
+  kubectl --kubeconfig $KCFG -n fuse-test-ns describe pod sshfs-fdpass-test | tail -n 60
+  kubectl --kubeconfig $KCFG -n fuse-test-ns describe pod s3fs-fdpass-test | tail -n 60
+
+- If "driver not found":
+  Check CSINode registration and kubelet path variant (prod vs rke2 manifest).
+
+- If GHCR image pull fails (401):
+  Verify ghcr-secret in target namespace and image pull policy strategy.
