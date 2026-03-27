@@ -1,325 +1,313 @@
-# Kubernetes FUSE マウント - meta-fuse-csi-plugin 実装例
+# Kubernetes FUSE マウント（PSS Restricted 対応）
 
-[meta-fuse-csi-plugin](https://github.com/pfnet-research/meta-fuse-csi-plugin) を使用して、Kubernetes Pod 内で各種ファイルシステムをFUSEマウントするためのサイドカーコンテナ実装例です。
+Kubernetes Pod 内で sshfs・s3fs をマウントするための **CSI ドライバー実装**です。
+独自の **fd-passing アーキテクチャ** により、ユーザー Pod が一切の特権を必要とせず、[Pod Security Standards (PSS) restricted](https://kubernetes.io/docs/concepts/security/pod-security-standards/) に完全準拠したまま FUSE マウントを実現します。
 
-## 概要
+## 対象環境
 
-このリポジトリは、Kubernetes上でFUSEベースのファイルシステムを安全にマウントするための実装を提供します。
-fusermount3-proxyを使用することで、アプリケーションコンテナに`CAP_SYS_ADMIN`権限を付与せずにFUSEマウントを実現します。
+| 環境 | 構成 |
+|------|------|
+| **開発** | kind（devcontainer） |
+| **本番** | Rancher で構築した RKE2、Capsule + Kyverno マルチテナント |
 
 ## サポートするファイルシステム
 
-| ファイルシステム | ディレクトリ | 説明 |
-|----------------|------------|------|
-| **sshfs** | [sshfs/](./sshfs/) | SSHプロトコルでリモートファイルシステムをマウント |
-| **s3fs** | [s3fs/](./s3fs/) | S3互換ストレージ（MinIO、Ceph、AWS S3等）をマウント |
+| ファイルシステム | 説明 |
+|----------------|------|
+| **sshfs** | SSH プロトコルでリモートファイルシステムをマウント |
+| **s3fs** | S3 互換ストレージ（MinIO、Ceph、AWS S3 等）をマウント |
 
 ## アーキテクチャ
 
 ```mermaid
 graph TB
-    subgraph Pod["User Pod"]
-        Sidecar["FUSE Sidecar<br/>(sshfs / s3fs +<br/>fusermount3-proxy)"]
-        App["App Container<br/>/data → FUSE mount"]
-        Sidecar -- "mountPropagation" --> App
+    subgraph AdminNS["fuse-csi-system（管理者管理）"]
+        CSI["fuse-csi-driver DaemonSet<br/>privileged: true<br/>open /dev/fuse + mount(2)"]
     end
 
-    subgraph CSIPod["CSI DaemonSet Pod"]
-        CSI["meta-fuse-csi-plugin<br/>(CAP_SYS_ADMIN)"]
+    subgraph TenantNS["テナント namespace（Capsule）<br/>PSS restricted enforced"]
+        subgraph UserPod["User Pod — 特権ゼロ"]
+            Init["initContainer: create-fuse-device<br/>touch /dev/fuse"]
+            Sidecar["sidecar initContainer<br/>sshfs-sidecar / s3fs-sidecar<br/>UID 1000 · 非特権"]
+            App["app container<br/>/data → FUSE mount<br/>UID 1000 · 非特権"]
+            Init --> Sidecar --> App
+        end
     end
 
-    Sidecar -. "Unix Domain Socket (UDS)" .-> CSI
+    CSI -. "UDS + SCM_RIGHTS<br/>/fuse-fd/csi.sock<br/>（FUSE fd + 認証情報）" .-> Sidecar
+    CSI -- "kubelet bind mount\nmountPropagation: Bidirectional" --> App
 
-    style Pod fill:#dae8fc,stroke:#6c8ebf
+    style AdminNS fill:#f8cecc,stroke:#b85450
+    style TenantNS fill:#dae8fc,stroke:#6c8ebf
+    style UserPod fill:#dae8fc,stroke:#6c8ebf
+    style Init fill:#ffe6cc,stroke:#d79b00
     style Sidecar fill:#fff2cc,stroke:#d6b656
     style App fill:#d5e8d4,stroke:#82b366
-    style CSIPod fill:#f8cecc,stroke:#b85450
     style CSI fill:#fff,stroke:#b85450
 ```
 
 ### 動作原理
 
-1. **Sidecarコンテナ**がFUSEファイルシステム（sshfs、s3fs等）を起動
-2. `touch /dev/fuse`により、libfuseがfusermount3経由パスを使用
-3. **fusermount3-proxy**がfusermount3として動作し、Unix Domain Socket (UDS)でCSI DaemonSetと通信
-4. **CSI DaemonSet**が`CAP_SYS_ADMIN`権限でマウント操作を実行
-5. **アプリケーションコンテナ**が権限なしでマウントされたファイルシステムにアクセス
+1. **CSI DaemonSet**（`fuse-csi-system`、特権コンテナ）が `/dev/fuse` を開き `mount(2)` でカーネルマウントを実行
+2. FUSE fd と認証情報を **Unix Domain Socket + SCM_RIGHTS** でサイドカーへ送信（認証情報はディスク非保存）
+3. **サイドカー**（UID 1000、特権不要）が fd を受け取り `sshfs`/`s3fs` デーモンを起動
+4. **fusermount3-stub** が libfuse のマウント呼び出しを横取りし、渡された fd を注入
+5. **アプリコンテナ**が特権なしでマウント済みファイルシステムへアクセス
+
+### 権限の分離
+
+| コンポーネント | namespace | 特権 | 管理者 |
+|--------------|-----------|------|--------|
+| CSI DaemonSet | `fuse-csi-system` | `privileged: true` | クラスター管理者のみ |
+| sshfs/s3fs サイドカー | テナント namespace | 不要 | テナントユーザー |
+| アプリコンテナ | テナント namespace | 不要 | テナントユーザー |
+
+## Capsule + Kyverno によるセキュリティ自動適用
+
+本番環境では Capsule テナントに属する全 Pod に対し、Kyverno が以下を **自動注入** します。ユーザーは securityContext を書く必要がありません。
+
+| 設定 | 値 | 効果 |
+|------|----|------|
+| `runAsNonRoot` | `true` | root での実行を禁止 |
+| `runAsUser` | `1000` | UID 1000 で実行 |
+| `seccompProfile` | `RuntimeDefault` | seccomp プロファイル適用 |
+| `allowPrivilegeEscalation` | `false` | 特権昇格を禁止 |
+| `capabilities.drop` | `ALL` | 全 capability を削除 |
+| `hostUsers` | `false` | ホスト UID 空間から分離（コンテナ脱出リスク低減） |
+
+> **FUSE ボリュームの例外**：`/dev/fuse` は `MOUNT_ATTR_IDMAP`（idmapped mount）非対応のため、FUSE CSI ボリュームを持つ Pod には `hostUsers: false` が注入されません（Kyverno ポリシーで自動除外）。ただし他の PSS restricted 設定はすべて適用されます。
+
+Kyverno ポリシーの詳細は [`policy/`](./policy/) を参照してください。
 
 ## ディレクトリ構成
 
 ```
-fuse_k8s/
-├── README.md                      # このファイル
-├── csi/                           # CSI ドライバー定義
-│   ├── csi-driver.yaml            # CSIDriver リソース定義
-│   └── csi-driver-daemonset.yaml  # CSI DaemonSet + RBAC
-├── sshfs/                         # SSH リモートファイルシステム
-│   ├── Dockerfile                 # sshfs サイドカーイメージ
-│   ├── entrypoint.sh              # sshfs 起動スクリプト
-│   ├── deploy-kind.yaml           # kind 向けデプロイマニフェスト
-│   ├── deploy.yaml                # レジストリ向けデプロイマニフェスト
-│   ├── configmap.example.yaml     # ConfigMap テンプレート
-│   └── README.md                  # sshfs 詳細ドキュメント
-└── s3fs/                          # S3 互換ストレージ
-    ├── Dockerfile                 # s3fs サイドカーイメージ
-    ├── entrypoint.sh              # s3fs 起動スクリプト
-    ├── deploy-kind.yaml           # kind 向けデプロイマニフェスト
-    ├── deploy.yaml                # レジストリ向けデプロイマニフェスト
-    ├── configmap.example.yaml     # ConfigMap テンプレート
-    └── README.md                  # s3fs 詳細ドキュメント
+tak_fuse_k8s/
+├── fuse-csi-driver/          # CSI ドライバー本体（Go）
+│   ├── cmd/                  # エントリポイント
+│   └── pkg/driver/           # NodePublishVolume / fd-passing 実装
+├── sshfs-sidecar/            # sshfs サイドカーイメージ（Go）
+│   ├── receiver/             # UDS クライアント・sshfs 起動
+│   └── fusermount3-stub/     # libfuse マウント呼び出し横取り
+├── s3fs-sidecar/             # s3fs サイドカーイメージ（Go）
+│   ├── receiver/             # UDS クライアント・s3fs 起動
+│   └── fusermount3-stub/     # libfuse マウント呼び出し横取り
+├── csi/                      # CSI ドライバー用 Kubernetes マニフェスト
+│   ├── fuse-csi-driver.yaml                # Namespace + CSIDriver
+│   ├── fuse-csi-driver-daemonset.yaml      # kind / devcontainer 用
+│   ├── fuse-csi-driver-daemonset-prod.yaml # RKE2 / kubeadm 用
+│   └── fuse-csi-driver-daemonset-k3s.yaml  # k3s 用
+├── sshfs/                    # sshfs ユーザー Pod サンプル
+├── s3fs/                     # s3fs ユーザー Pod サンプル
+├── policy/                   # Capsule テナント・Kyverno ポリシー定義
+├── docs/                     # 設計・運用ガイド
+└── old/                      # 旧アーキテクチャ（参照用・非推奨）
 ```
 
-## クイックスタート
+---
 
-### 1. 前提条件
+## セットアップ（管理者）
 
-- Kubernetes v1.29+ (SidecarContainers 機能が必要)
-- kubectl がクラスターに接続済み
+CSI ドライバーのデプロイはクラスター管理者が行います。テナントユーザーはこの手順は不要です。
 
-### 2. プライベートリポジトリの場合：イメージ認証設定
-
-このリポジトリが **プライベート** に設定されている場合、GitHub Container Registry (`ghcr.io`) からイメージをpullするには GitHub Personal Access Token (PAT) が必要です。
-
-#### PAT の発行
-
-1. GitHub → **Settings** → **Developer settings** → **Personal access tokens** → **Tokens (classic)**
-2. **Generate new token** をクリック
-3. スコープで **`read:packages`** にチェックを入れてトークンを生成
-4. 生成されたトークンをメモ（一度しか表示されません）
-
-#### Docker CLI でのログイン（ローカルでイメージをpullする場合）
+### 1. CSI ドライバーのデプロイ
 
 ```bash
-echo <YOUR_PAT> | docker login ghcr.io -u <GITHUB_USERNAME> --password-stdin
+kubectl apply -f csi/fuse-csi-driver.yaml
 ```
 
-#### Kubernetes での imagePullSecret 作成（クラスターからpullする場合）
-
-Pod が `ghcr.io` からイメージをpullできるよう、Secret を作成します：
+クラスター種別に応じて DaemonSet マニフェストを選択してください：
 
 ```bash
-kubectl create secret docker-registry ghcr-secret \
-  --docker-server=ghcr.io \
-  --docker-username=<GITHUB_USERNAME> \
-  --docker-password=<YOUR_PAT>
+# kind / devcontainer
+kubectl apply -f csi/fuse-csi-driver-daemonset.yaml
+
+# RKE2（Rancher 構築）/ kubeadm
+kubectl apply -f csi/fuse-csi-driver-daemonset-prod.yaml
+
+# k3s
+kubectl apply -f csi/fuse-csi-driver-daemonset-k3s.yaml
 ```
-
-作成した Secret は、`deploy.yaml` の `imagePullSecrets` に追加してください：
-
-```yaml
-spec:
-  imagePullSecrets:
-    - name: ghcr-secret
-```
-
-> **注意**: リポジトリが **パブリック** の場合、この手順は不要です。
-
-### 3. CSI ドライバーのデプロイ
-
-すべてのFUSE実装で共通のCSIドライバーをデプロイします（1回のみ実施）。
 
 ```bash
-kubectl apply -f csi/csi-driver.yaml
-kubectl apply -f csi/csi-driver-daemonset.yaml
-
-# DaemonSet の起動確認
-kubectl get ds -n mfcp-system
-kubectl get pods -n mfcp-system
+# 起動確認
+kubectl get pods -n fuse-csi-system
 ```
 
-### 4. ConfigMap の作成
-
-接続パラメータは ConfigMap で管理します。テンプレートからコピーして環境に合わせて編集してください。
+### 2. Capsule + Kyverno ポリシーの適用
 
 ```bash
-# sshfs の場合
-cp sshfs/configmap.example.yaml sshfs/configmap.yaml
-vi sshfs/configmap.yaml    # 環境に合わせて編集
-kubectl apply -f sshfs/configmap.yaml
+# Capsule テナント定義（tenant name / owner は実環境に合わせて変更）
+kubectl apply -f policy/capsule-tenant-example.yaml
 
-# s3fs の場合
-cp s3fs/configmap.example.yaml s3fs/configmap.yaml
-vi s3fs/configmap.yaml     # 環境に合わせて編集
-kubectl apply -f s3fs/configmap.yaml
+# Kyverno: PSS restricted securityContext 自動注入
+kubectl apply -f policy/kyverno-force-securecontext.yaml
+
+# Kyverno: hostUsers: false 自動設定（FUSE ボリューム Pod は自動除外）
+kubectl apply -f policy/kyverno-force-userns.yaml
 ```
 
-> **注意**: `configmap.example.yaml` 以外の `configmap*.yaml` は `.gitignore` で除外されています。環境固有の設定値を含むため、Git にコミットしないでください。
+---
 
-### 5. 使用するファイルシステムを選択
+## セットアップ（テナントユーザー）
 
-各ファイルシステムの詳細なセットアップ手順は、それぞれのREADMEを参照してください：
+### Secret の作成
 
-#### SSH リモートファイルシステム (sshfs)
 ```bash
-# kind 環境（ローカルイメージ）
-kubectl apply -f sshfs/deploy-kind.yaml
+# sshfs: SSH 秘密鍵
+# ⚠️ --from-file を使うこと。--from-literal は末尾改行を除去するため libcrypto エラーが発生する
+kubectl create secret generic ssh-key \
+  --from-file=private_key=~/.ssh/id_ed25519 \
+  -n <your-namespace>
 
-# レジストリイメージ
-kubectl apply -f sshfs/deploy.yaml
+# s3fs: S3 認証情報
+kubectl create secret generic s3-credentials \
+  --from-literal=access_key=YOUR_ACCESS_KEY \
+  --from-literal=secret_key=YOUR_SECRET_KEY \
+  -n <your-namespace>
 ```
-[→ sshfs/README.md](./sshfs/README.md)
 
-#### S3 互換ストレージ (s3fs)
+### Pod のデプロイ
+
 ```bash
-# kind 環境（ローカルイメージ）
-kubectl apply -f s3fs/deploy-kind.yaml
+# sshfs
+kubectl apply -f sshfs/deploy-kind-fdpass.yaml -n <your-namespace>
 
-# レジストリイメージ
-kubectl apply -f s3fs/deploy.yaml
+# s3fs
+kubectl apply -f s3fs/deploy-kind-fdpass.yaml -n <your-namespace>
 ```
-[→ s3fs/README.md](./s3fs/README.md)
+
+マニフェスト内の `volumeAttributes`（`host`、`user`、`remotePath`、`bucket` 等）を環境に合わせて変更してください。
+
+**securityContext は Kyverno が自動注入するため、Pod マニフェストへの記述は不要です。**
+
+---
 
 ## 各実装の比較
 
 | 機能 | sshfs | s3fs |
 |------|-------|------|
 | **プロトコル** | SSH | HTTP/S (S3 API) |
-| **認証方式** | SSH鍵ペア | アクセスキー/シークレットキー |
-| **対応ストレージ** | SSHサーバー | AWS S3, MinIO, Ceph等 |
-| **ユースケース** | 既存サーバーのファイル共有 | オブジェクトストレージのマウント |
-| **ConfigMap** | `sshfs-config` (接続情報) | `s3fs-config` (接続情報) |
-| **Secret** | `ssh-key` (秘密鍵) | `s3-credentials` (アクセスキー) |
+| **認証方式** | SSH 鍵ペア | アクセスキー / シークレットキー |
+| **対応ストレージ** | SSH サーバー | AWS S3, MinIO, Ceph 等 |
+| **Secret キー** | `private_key` | `access_key`, `secret_key` |
+| **主な volumeAttributes** | `host`, `user`, `remotePath`, `port` | `bucket`, `endpoint`, `region` |
 
-## 開発・テスト
+---
 
-### kind での開発
-
-#### kind クラスターの作成
+## 開発（kind 環境）
 
 ```bash
-# kind のインストール (未インストールの場合)
-# Linux
-curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
-chmod +x ./kind
-sudo mv ./kind /usr/local/bin/kind
+# クラスター作成
+kind create cluster --name fuse-dev --config .devcontainer/kind-config.yaml
 
-# macOS
-brew install kind
+# イメージのビルドと kind へのロード
+cd fuse-csi-driver && docker build -t fuse-csi-driver:latest . && cd ..
+docker build -t sshfs-sidecar:latest ./sshfs-sidecar/
+docker build -t s3fs-sidecar:latest ./s3fs-sidecar/
+kind load docker-image fuse-csi-driver:latest sshfs-sidecar:latest s3fs-sidecar:latest --name fuse-dev
 
-# kind クラスターの作成
-kind create cluster --name fuse-dev
+# ユニットテスト
+cd fuse-csi-driver && go test ./pkg/driver/...
+go test ./pkg/driver/ -run TestMountSshfs_MissingHost  # 単一テスト
 
-# kubectl のコンテキスト確認
-kubectl cluster-info --context kind-fuse-dev
-```
+# 統合テスト（fd-passing 動作確認）
+.devcontainer/test-fdpass.sh
 
-#### イメージのビルドとロード
-
-```bash
-# ビルド
-docker build -t sshfs-proxy:latest ./sshfs/
-docker build -t s3fs-proxy:latest ./s3fs/
-
-# kind にロード
-kind load docker-image sshfs-proxy:latest --name fuse-dev
-kind load docker-image s3fs-proxy:latest --name fuse-dev
-
-# ロードされたイメージの確認
-docker exec -it fuse-dev-control-plane crictl images | grep proxy
-```
-
-#### ConfigMap の作成とデプロイ
-
-```bash
-# ConfigMap の作成（テンプレートからコピーして編集）
-cp sshfs/configmap.example.yaml sshfs/configmap.yaml
-cp s3fs/configmap.example.yaml s3fs/configmap.yaml
-# 各 configmap.yaml を環境に合わせて編集
-
-# ConfigMap の適用
-kubectl apply -f sshfs/configmap.yaml
-kubectl apply -f s3fs/configmap.yaml
-
-# kind 向けマニフェストを使用
-kubectl apply -f sshfs/deploy-kind.yaml
-kubectl apply -f s3fs/deploy-kind.yaml
-```
-
-#### kind クラスターの削除
-
-開発が終了したらクラスターを削除できます。
-
-```bash
-# クラスターの削除
+# クラスター削除
 kind delete cluster --name fuse-dev
-
-# すべてのkindクラスターを削除
-kind delete clusters --all
-
-# クラスター一覧の確認
-kind get clusters
 ```
+
+---
 
 ## トラブルシューティング
 
 ### CSI DaemonSet が起動しない
 
 ```bash
-# DaemonSetの状態確認
-kubectl get ds -n mfcp-system
-kubectl describe ds -n mfcp-system meta-fuse-csi-plugin
-
-# Podのログ確認
-kubectl logs -n mfcp-system -l app.kubernetes.io/name=meta-fuse-csi-plugin
+kubectl get pods -n fuse-csi-system
+kubectl describe ds -n fuse-csi-system fuse-csi-driver
+kubectl logs -n fuse-csi-system -l app=fuse-csi-driver
 ```
 
 ### マウントが失敗する
 
-各実装のREADMEにあるトラブルシューティングセクションを参照してください：
-- [sshfs トラブルシューティング](./sshfs/README.md#トラブルシューティング)
-- [s3fs トラブルシューティング](./s3fs/README.md#トラブルシューティング)
+```bash
+# サイドカーのログ確認
+kubectl logs <pod-name> -c sshfs-sidecar   # または s3fs-sidecar
 
-### 一般的な確認項目
+# マウント状態の確認
+kubectl exec <pod-name> -c app -- mount | grep fuse
 
-1. サイドカーコンテナのログ確認：
-   ```bash
-   kubectl logs <pod-name> -c sshfs-proxy  # または s3fs-proxy
-   ```
+# CSI ドライバーのログ確認
+kubectl logs -n fuse-csi-system -l app=fuse-csi-driver
+```
 
-2. マウント状態の確認：
-   ```bash
-   kubectl exec <pod-name> -c app -- mount | grep fuse
-   ```
+### SSH 鍵エラー（`error in libcrypto`）
 
-3. CSI DaemonSetとの通信確認：
-   ```bash
-   kubectl logs -n mfcp-system -l app.kubernetes.io/name=meta-fuse-csi-plugin
-   ```
+```bash
+kubectl delete secret ssh-key -n <your-namespace>
+kubectl create secret generic ssh-key \
+  --from-file=private_key=~/.ssh/id_ed25519 \
+  -n <your-namespace>
+```
 
-## セキュリティ考慮事項
+### Kyverno 注入の確認
 
-- **セキュリティオプションはデフォルト有効**: ConfigMap で無効化可能
-  - sshfs: `SSHFS_STRICT_HOST_KEY_CHECK` — デフォルト `true`（`StrictHostKeyChecking=accept-new`）
-  - s3fs: `S3FS_NO_CHECK_CERT` — デフォルト `false`（TLS証明書検証有効）
-- **サイドカーコンテナは `privileged: true` で動作**: fusermount3-proxyがUnix Domain Socket (UDS)通信を行うために必要
-- **`runAsNonRoot: false` の明示的設定**: CSI DaemonSet（csi-driver、node-driver-registrar）、サイドカーコンテナ、アプリコンテナに設定。Pod Security Admission が有効な環境でコンテナの起動を保証するため
-- **アプリケーションコンテナは権限不要**: マウント済みファイルシステムへのアクセスのみ
-- **ConfigMap管理**: 接続パラメータ（ホスト、バケット名等）はKubernetes ConfigMapで管理
-- **Secret管理**: SSH鍵やS3認証情報はKubernetes Secretで管理
-- **本番環境での推奨事項**:
-  - SSH鍵にはパスフレーズを設定
-  - `SSHFS_STRICT_HOST_KEY_CHECK: "true"`（デフォルト）のまま利用
-  - `S3FS_NO_CHECK_CERT: "false"`（デフォルト）のまま利用
-  - 最小権限の原則に従ってIAMロールやSSH権限を設定
+```bash
+kubectl get pod <pod-name> -n <tenant-ns> -o yaml | \
+  grep -A5 "runAsNonRoot\|seccompProfile\|allowPrivilegeEscalation\|hostUsers"
+```
+
+---
+
+## プライベートレジストリからのイメージ取得
+
+`ghcr.io` からイメージを pull する場合、GitHub PAT（スコープ: `read:packages`）が必要です。
+
+```bash
+# Kubernetes imagePullSecret の作成
+kubectl create secret docker-registry ghcr-secret \
+  --docker-server=ghcr.io \
+  --docker-username=<GITHUB_USERNAME> \
+  --docker-password=<YOUR_PAT> \
+  -n fuse-csi-system
+
+# DaemonSet の imagePullSecrets を有効化（prod マニフェスト内のコメントを外す）
+```
+
+リポジトリがパブリックの場合は不要です。
+
+## CI/CD
+
+push to `main` でマルチプラットフォームイメージ（linux/amd64 + linux/arm64）をビルドし公開：
+
+- `ghcr.io/scaleworx-inc/fuse_k8s-sshfs:latest`
+- `ghcr.io/scaleworx-inc/fuse_k8s-s3fs:latest`
+
+タグ形式：`latest`（main ブランチ）、`YYYYMMDD-{sha}`
 
 ## 参考資料
 
-- [meta-fuse-csi-plugin](https://github.com/pfnet-research/meta-fuse-csi-plugin) - 本プロジェクトのベースとなるCSIプラグイン
 - [sshfs](https://github.com/libfuse/sshfs) - SSH Filesystem
 - [s3fs-fuse](https://github.com/s3fs-fuse/s3fs-fuse) - S3 Filesystem FUSE
-- [Kubernetes SidecarContainers](https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/) - Kubernetes v1.29+ のサイドカー機能
+- [Kubernetes Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/)
+- [Kubernetes SidecarContainers](https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/) - v1.29+
+- [Capsule](https://capsule.clastix.io/) - Kubernetes マルチテナント
+- [Kyverno](https://kyverno.io/) - Kubernetes ポリシーエンジン
+- [SCM_RIGHTS (unix(7))](https://man7.org/linux/man-pages/man7/unix.7.html) - ファイルディスクリプタの UDS 受け渡し
+- 設計詳細: [`docs/design-fuse-csi-driver-pss-restricted.md`](./docs/design-fuse-csi-driver-pss-restricted.md)
 
 ## ライセンス
 
 各ツールのライセンスに従います：
-- meta-fuse-csi-plugin: Apache License 2.0
 - sshfs: GPL
 - s3fs-fuse: GPL-2.0
 
 ## コントリビューション
 
-新しいFUSEファイルシステムの実装を追加する場合：
-1. 新しいディレクトリを作成（例: `nfs/`, `gcsfuse/`）
-2. 同じパターンでDockerfile、entrypoint.sh、deploy.yamlを作成
-3. README.mdで詳細を文書化
-4. このREADMEの対応表に追加
+新しい FUSE ファイルシステムを追加する場合：
+1. `sshfs-sidecar/` をテンプレートとして新しいサイドカーディレクトリを作成
+2. `fusermount3-stub/main.go` はそのままコピー（全実装で共通）
+3. `fuse-csi-driver/pkg/driver/node.go` に `case` を追加
+4. GitHub Actions のマトリックス（`.github/workflows/docker-image.yml`）に追加

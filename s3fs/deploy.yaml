@@ -1,117 +1,58 @@
 # =============================================================================
-# meta-fuse-csi-plugin + s3fs: デプロイマニフェスト（レジストリイメージ版）
+# fd-passing アーキテクチャ用 Pod サンプル（本番環境）
+# s3fs-sidecar が FUSE データプレーンを担当する
 #
 # 使い方:
-#   1. configmap.example.yaml をコピーして環境別 ConfigMap を作成・適用
-#   2. S3認証情報Secretを作成:
+#   1. S3 認証情報 Secret を作成
 #      kubectl create secret generic s3-credentials \
 #        --from-literal=access_key=YOUR_ACCESS_KEY \
-#        --from-literal=secret_key=YOUR_SECRET_KEY
-#   3. kubectl apply -f deploy.yaml
+#        --from-literal=secret_key=YOUR_SECRET_KEY \
+#        -n <tenant-namespace>
 #
-# アーキテクチャ:
-#   [s3fs sidecar]
-#     └─ touch /dev/fuse            (libfuse に fusermount3 経由を強制)
-#     └─ s3fs ... -f                (フォアグラウンド起動)
-#     └─ fusermount3-proxy          (fusermount3 として差し替え済み)
-#          └─ UDS ─────────────────> [CSI DaemonSet (CAP_SYS_ADMIN)]
-#                                        └─ open("/dev/fuse") + mount()
-#   [app container]
-#     └─ /data (HostToContainer 伝播)
+#   2. volumeAttributes の bucket / endpoint を実環境に合わせて変更
+#
+#   3. Pod をデプロイ
+#      kubectl apply -f s3fs/deploy.yaml -n <tenant-namespace>
+#
+# 注意:
+#   - FUSE CSI ボリュームを持つ Pod は hostUsers: false が Kyverno から自動除外される
+#     （/dev/fuse FUSE は MOUNT_ATTR_IDMAP 非対応のため）
+#   - securityContext（PSS restricted）は Kyverno が自動注入
 # =============================================================================
-
-# -----------------------------------------------------------------------
-# Pod: s3fs マウント + アプリケーション (Kubernetes v1.29+ サイドカー対応)
-# -----------------------------------------------------------------------
 apiVersion: v1
 kind: Pod
 metadata:
   name: s3fs-example
-  labels:
-    app.kubernetes.io/name: s3fs-proxy
-    app.kubernetes.io/component: example
+  # namespace は Capsule テナント namespace に変更すること
 spec:
-  # -----------------------------------------------------------------------
-  # s3fs コンテナを restartable init container (sidecar) として定義。
-  # startupProbe が成功するまでアプリコンテナは起動しない。
-  # (Kubernetes v1.29+ の SidecarContainers 機能を使用)
-  # -----------------------------------------------------------------------
+  # s3fs-sidecar を sidecar initContainer として定義する。
+  # FUSE デーモン（s3fs）が起動し /fuse-fd/ready を書いた後に app コンテナが起動する。
+  # これにより FUSE bind mount が s3fs 起動前に runc でタイムアウトする問題を回避する。
+  # （Kubernetes 1.29+ の sidecar initContainer 機能を使用）
   initContainers:
-    - name: s3fs-proxy
-      image: ghcr.io/scaleworx-inc/fuse_k8s-s3fs:latest
-      imagePullPolicy: Always
-      securityContext:
-        privileged: true
-        runAsNonRoot: false
-      restartPolicy: Always   # サイドカーとして動作 (v1.29+)
-      env:
-        # S3 接続情報 (ConfigMap から注入)
-        - name: S3FS_BUCKET
-          valueFrom:
-            configMapKeyRef:
-              name: s3fs-config
-              key: S3FS_BUCKET
-        - name: S3FS_ENDPOINT
-          valueFrom:
-            configMapKeyRef:
-              name: s3fs-config
-              key: S3FS_ENDPOINT
-        - name: S3FS_REGION
-          valueFrom:
-            configMapKeyRef:
-              name: s3fs-config
-              key: S3FS_REGION
-        # S3認証情報 (Secretから注入)
-        - name: AWS_ACCESS_KEY_ID
-          valueFrom:
-            secretKeyRef:
-              name: s3-credentials
-              key: access_key
-        - name: AWS_SECRET_ACCESS_KEY
-          valueFrom:
-            secretKeyRef:
-              name: s3-credentials
-              key: secret_key
-        # s3fs マウントポイント = CSIボリュームのコンテナ内マウントパスと一致させること
-        - name: S3FS_MOUNT_POINT
-          value: /mnt/s3fs
-        # 追加のs3fsオプション (オプショナル)
-        - name: S3FS_OPTS
-          value: ""
-        # TLS証明書検証の無効化 (true | false)
-        # デフォルト false (検証有効)。MinIO等自己署名証明書環境では true に設定する
-        - name: S3FS_NO_CHECK_CERT
-          valueFrom:
-            configMapKeyRef:
-              name: s3fs-config
-              key: S3FS_NO_CHECK_CERT
-        # -----------------------------------------------------------------------
-        # FUSERMOUNT3PROXY_FDPASSING_SOCKPATH:
-        #   fusermount3-proxy が CSI DaemonSet と通信する UDS ソケットのフルパス。
-        #   volumes[].csi.volumeAttributes.socketDir + "/" + socketName と一致させる。
-        # -----------------------------------------------------------------------
-        - name: FUSERMOUNT3PROXY_FDPASSING_SOCKPATH
-          value: /var/lib/mfcp/uds/mfcp.sock
+    # /dev/fuse 用の空ファイルを作成（libfuse が stat("/dev/fuse") を要求するため）
+    # コンテナ runtime は /dev を fresh tmpfs に差し替えるため、
+    # emptyDir subPath で /dev/fuse を上書きする必要がある。
+    - name: create-fuse-device
+      image: busybox:stable
+      command: ["touch", "/fuse-dev/fuse"]
       volumeMounts:
-        # CSI DaemonSet との UDS 通信用ソケットディレクトリ (emptyDir)
-        - name: fuse-socket-dir
-          mountPath: /var/lib/mfcp/uds
-        # s3fs マウントポイント
-        # Bidirectional: ホスト側にマウントを伝播させるために必須
-        - name: s3fs-volume
-          mountPath: /mnt/s3fs
-          mountPropagation: Bidirectional
-      # マウント完了プローブ: アプリコンテナはこれが成功するまで起動しない
-      startupProbe:
+        - name: fuse-device
+          mountPath: /fuse-dev
+
+    # s3fs-sidecar: FUSE fd を受け取り s3fs を起動するサイドカー
+    # restartPolicy: Always → sidecar initContainer（app より先に起動、app と並行して稼働）
+    - name: s3fs-sidecar
+      image: ghcr.io/scaleworx-inc/fuse_k8s-s3fs-sidecar:latest
+      imagePullPolicy: Always
+      restartPolicy: Always
+      # readinessProbe が通過するまで app コンテナの起動を待機する
+      readinessProbe:
         exec:
-          command:
-            - sh
-            - -c
-            - "mount | grep fuse.s3fs"
-        initialDelaySeconds: 5
-        periodSeconds: 3
+          command: ["test", "-f", "/fuse-fd/ready"]
+        initialDelaySeconds: 2
+        periodSeconds: 2
         failureThreshold: 30
-        successThreshold: 1
       resources:
         requests:
           cpu: 50m
@@ -119,31 +60,25 @@ spec:
         limits:
           cpu: 200m
           memory: 256Mi
+      volumeMounts:
+        - name: fuse-fd
+          mountPath: /fuse-fd
+        # /dev/fuse を空ファイルで上書き（libfuse の stat チェックを通過させる）
+        - name: fuse-device
+          mountPath: /dev/fuse
+          subPath: fuse
 
   containers:
-    # -----------------------------------------------------------------------
-    # アプリケーションコンテナ
-    # s3fs-proxy の startupProbe が成功してから起動するため、
-    # /data には確実に s3fs がマウントされている。
-    # -----------------------------------------------------------------------
     - name: app
-      image: busybox:stable
-      securityContext:
-        runAsNonRoot: false
-      command: ["/bin/sh", "-c"]
-      args:
-        - |
-          echo "=== s3fs マウント確認 ==="
-          mount | grep fuse
-          echo "=== /data の内容 ==="
-          ls -la /data
-          sleep infinity
+      image: your-app-image:latest  # 実際のアプリイメージに変更すること
+      # securityContext（PSS restricted）は Kyverno が自動注入:
+      #   runAsNonRoot: true, runAsUser: 1000
+      #   allowPrivilegeEscalation: false, capabilities.drop: [ALL]
+      #   seccompProfile: RuntimeDefault
+      # FUSE CSI ボリュームがあるため hostUsers は注入されない（MOUNT_ATTR_IDMAP 非対応）
       volumeMounts:
-        # s3fs でマウントされたディレクトリを /data として利用
-        # HostToContainer: ホスト側のマウントをコンテナに伝播
-        - name: s3fs-volume
+        - name: s3fs-vol
           mountPath: /data
-          mountPropagation: HostToContainer
       resources:
         requests:
           cpu: 10m
@@ -153,25 +88,23 @@ spec:
           memory: 128Mi
 
   volumes:
-    # CSI DaemonSet との UDS 通信用 emptyDir
-    - name: fuse-socket-dir
+    - name: s3fs-vol
+      csi:
+        driver: fuse.csi.fuse-k8s.io
+        volumeAttributes:
+          type: s3fs
+          bucket: "your-bucket"
+          endpoint: "https://your-s3-endpoint"   # MinIO: http://minio.svc:9000 / AWS: https://s3.amazonaws.com
+          region: "us-east-1"
+          noCheckCert: "false"                    # 自己署名証明書の場合は "true"
+        nodePublishSecretRef:
+          name: s3-credentials          # kubectl create secret generic s3-credentials \
+                                        #   --from-literal=access_key=KEY \
+                                        #   --from-literal=secret_key=SECRET \
+                                        #   -n <namespace>
+    - name: fuse-fd
+      emptyDir: {}
+    - name: fuse-device
       emptyDir: {}
 
-    # meta-fuse-csi-plugin が管理する CSI エフェメラルボリューム
-    - name: s3fs-volume
-      csi:
-        driver: meta-fuse-csi-plugin.csi.storage.pfn.io
-        volumeAttributes:
-          # UDS ソケットのディレクトリパス (fuse-socket-dir マウントポイントと一致)
-          socketDir: /var/lib/mfcp/uds
-          # UDS ソケットファイル名
-          socketName: mfcp.sock
-          fdPassingEmptyDirName: fuse-socket-dir
-          fdPassingSocketName: mfcp.sock
-
-  # プライベートリポジトリの場合は以下のコメントを外してください
-  # imagePullSecrets:
-  #   - name: ghcr-secret
-
-  # s3fs コンテナが正常にアンマウントするための猶予時間
   terminationGracePeriodSeconds: 30

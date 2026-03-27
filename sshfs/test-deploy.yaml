@@ -1,0 +1,83 @@
+# =============================================================================
+# fd-passing アーキテクチャ用テスト Pod（kind 開発環境）
+# csi/test-ssh-server.yaml の SSH サーバーに接続して動作確認する
+#
+# 前提:
+#   - csi/test-ssh-server.yaml がデプロイ済み（ssh-server Pod + Service in default ns）
+#   - ssh-key Secret が test-tenant-ns に存在すること
+#     kubectl create secret generic ssh-key \
+#       --from-file=private_key=/tmp/test-sshkey \
+#       -n test-tenant-ns
+#
+# デプロイ:
+#   kubectl apply -f sshfs/test-deploy.yaml -n test-tenant-ns
+# =============================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sshfs-fdpass-test
+  namespace: test-tenant-ns
+spec:
+  initContainers:
+    # /dev/fuse 用の空ファイルを作成（libfuse が stat("/dev/fuse") を要求するため）
+    - name: create-fuse-device
+      image: busybox:stable
+      command: ["touch", "/fuse-dev/fuse"]
+      volumeMounts:
+        - name: fuse-device
+          mountPath: /fuse-dev
+
+    # sshfs-sidecar: FUSE fd を受け取り sshfs を起動するサイドカー
+    - name: sshfs-sidecar
+      image: sshfs-sidecar:latest
+      imagePullPolicy: Never
+      restartPolicy: Always
+      readinessProbe:
+        exec:
+          command: ["test", "-f", "/fuse-fd/ready"]
+        initialDelaySeconds: 2
+        periodSeconds: 2
+        failureThreshold: 30
+      volumeMounts:
+        - name: fuse-fd
+          mountPath: /fuse-fd
+        - name: fuse-device
+          mountPath: /dev/fuse
+          subPath: fuse
+
+  containers:
+    - name: app
+      image: busybox:stable
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          echo "=== マウント確認 ==="
+          mount | grep fuse || echo "(fuse マウントなし)"
+          echo "=== /data の内容 ==="
+          ls -la /data
+          echo "=== 書き込みテスト (UID=$(id -u)) ==="
+          echo "hello fuse from uid=$(id -u)" > /data/test.txt && cat /data/test.txt && echo "書き込み成功！"
+          sleep infinity
+      volumeMounts:
+        - name: sshfs-vol
+          mountPath: /data
+
+  volumes:
+    - name: sshfs-vol
+      csi:
+        driver: fuse.csi.fuse-k8s.io
+        volumeAttributes:
+          type: sshfs
+          host: "ssh-server.default.svc.cluster.local"
+          user: "testuser"
+          remotePath: "/data"
+          port: "22"
+          strictHostKeyCheck: "false"
+        nodePublishSecretRef:
+          name: ssh-key
+    - name: fuse-fd
+      emptyDir: {}
+    - name: fuse-device
+      emptyDir: {}
+
+  terminationGracePeriodSeconds: 30

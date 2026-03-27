@@ -1,14 +1,14 @@
 # =============================================================================
-# fuse-csi-driver: ServiceAccount + DaemonSet（kubeadm 本番環境版）
+# fuse-csi-driver: ServiceAccount + DaemonSet（RKE2 本番環境版）
 #
-# kubelet データディレクトリ: /var/lib/kubelet（kubeadm デフォルト）
-# RKE2 環境の場合は fuse-csi-driver-daemonset-rke2.yaml を使用すること。
+# RKE2 の kubelet データディレクトリは /var/lib/rancher/rke2/agent/kubelet
+# （kubeadm の /var/lib/kubelet とは異なる）
 #
 # ghcr.io のイメージを使用。main ブランチへの push で自動ビルドされる。
 #
 # 使い方:
 #   kubectl apply -f csi/fuse-csi-driver.yaml
-#   kubectl apply -f csi/fuse-csi-driver-daemonset-prod.yaml
+#   kubectl apply -f csi/fuse-csi-driver-daemonset-rke2.yaml
 #   kubectl get pods -n fuse-csi-system
 #
 # プライベートリポジトリの場合は imagePullSecrets を設定:
@@ -101,7 +101,7 @@ spec:
               mountPath: /csi
             # kubelet ディレクトリ（Bidirectional: マウントをホストに伝播するために必須）
             - name: kubelet-dir
-              mountPath: /var/lib/kubelet
+              mountPath: /var/lib/rancher/rke2/agent/kubelet
               mountPropagation: Bidirectional
             # /dev/fuse へのアクセス（sshfs/s3fs が必要）
             - name: dev-fuse
@@ -115,7 +115,7 @@ spec:
           image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.0
           args:
             - --csi-address=/csi/csi.sock
-            - --kubelet-registration-path=/var/lib/kubelet/plugins/fuse.csi.fuse-k8s.io/csi.sock
+            - --kubelet-registration-path=/var/lib/rancher/rke2/agent/kubelet/plugins/fuse.csi.fuse-k8s.io/csi.sock
           resources:
             requests:
               cpu: 10m
@@ -133,17 +133,17 @@ spec:
         # CSI gRPC ソケット用ディレクトリ（ホストパス）
         - name: socket-dir
           hostPath:
-            path: /var/lib/kubelet/plugins/fuse.csi.fuse-k8s.io
+            path: /var/lib/rancher/rke2/agent/kubelet/plugins/fuse.csi.fuse-k8s.io
             type: DirectoryOrCreate
         # kubelet プラグイン登録用ディレクトリ
         - name: registration-dir
           hostPath:
-            path: /var/lib/kubelet/plugins_registry
+            path: /var/lib/rancher/rke2/agent/kubelet/plugins_registry
             type: Directory
         # kubelet ディレクトリ（NodePublishVolume の targetPath を含む）
         - name: kubelet-dir
           hostPath:
-            path: /var/lib/kubelet
+            path: /var/lib/rancher/rke2/agent/kubelet
             type: Directory
         # FUSE デバイス
         - name: dev-fuse
