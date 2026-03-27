@@ -25,7 +25,7 @@ kubectl get nodes
 
 ---
 
-## 1. k3s ノードの事前確認
+## k3s ノードの事前確認
 
 ### FUSE カーネルモジュール確認
 
@@ -48,7 +48,7 @@ cat /proc/sys/kernel/unprivileged_userns_clone
 
 ---
 
-## 2. Capsule v0.10.8 インストール
+## Capsule v0.10.8 インストール
 
 ```bash
 # Helm リポジトリ追加
@@ -79,7 +79,7 @@ capsule-controller-manager-xxxxx       1/1     Running
 
 ---
 
-## 3. Kyverno v1.15.2 インストール
+## Kyverno v1.15.2 インストール
 
 ```bash
 helm repo add kyverno https://kyverno.github.io/kyverno/
@@ -112,7 +112,7 @@ kubectl get pods -n kyverno
 
 ---
 
-## 4. Cilium の動作確認
+## Cilium の動作確認
 
 Rancher が Cilium 1.19 を CNI として設定済みのため、追加インストールは不要。
 
@@ -129,7 +129,7 @@ cilium status
 
 ---
 
-## 5. fuse-csi-driver のデプロイ
+## fuse-csi-driver のデプロイ
 
 ghcr.io のイメージを使用する（GitHub Actions で自動ビルド済み）。
 
@@ -170,7 +170,7 @@ kubectl get csidriver fuse.csi.fuse-k8s.io -o yaml
 
 ---
 
-## 6. Capsule Tenant + Kyverno ポリシーの適用
+## Capsule Tenant + Kyverno ポリシーの適用
 
 ```bash
 # Kyverno ポリシー適用
@@ -193,7 +193,7 @@ Tenant の作成は管理者が行う（手順書「本番管理者管理手順�
 
 ---
 
-## 7. テスト用 Tenant + namespace 作成
+## テスト用 Tenant + namespace 作成
 
 ```bash
 # テスト用 Tenant を適用
@@ -216,7 +216,7 @@ oil-test   restricted                           example-tenant
 
 ---
 
-## 8. sshfs テスト
+## sshfs テスト
 
 ### Secret 作成
 
@@ -229,10 +229,10 @@ kubectl create secret generic ssh-key \
 
 ### Pod デプロイ
 
-`sshfs/deploy-kind.yaml` をコピーして `host`/`user`/`remotePath` を編集:
+`sshfs/deploy.yaml` をコピーして `host`/`user`/`remotePath` を編集:
 
 ```bash
-cp sshfs/deploy-kind.yaml /tmp/sshfs-test.yaml
+cp sshfs/deploy.yaml /tmp/sshfs-test.yaml
 # host / user / remotePath を実環境の値に変更
 # image: sshfs-sidecar:latest を ghcr.io のイメージに変更し imagePullPolicy: Always に変更
 kubectl apply -f /tmp/sshfs-test.yaml -n oil-test
@@ -244,7 +244,7 @@ kubectl wait --for=condition=Ready pod/sshfs-fdpass-example -n oil-test --timeou
 ```bash
 # Kyverno ミューテーション確認
 kubectl get pod sshfs-fdpass-example -n oil-test -o jsonpath='{.spec.hostUsers}' && echo
-# 期待: false
+# 期待: 空（未設定、FUSE CSI volume のため hostUsers 注入スキップ）
 
 kubectl get pod sshfs-fdpass-example -n oil-test \
   -o jsonpath='{.spec.securityContext}' | python3 -m json.tool
@@ -262,7 +262,7 @@ kubectl exec -n oil-test sshfs-fdpass-example -- sh -c \
 
 ---
 
-## 9. s3fs テスト（MinIO 使用例）
+## s3fs テスト（MinIO 使用例）
 
 ```bash
 # MinIO を kind に立てる場合（テスト用）
@@ -298,12 +298,12 @@ kubectl create secret generic s3-credentials \
   --from-literal=secret_key=minioadmin \
   -n oil-test
 
-# s3fs/deploy-kind.yaml の endpoint を $MINIO_IP:9000 に書き換えてデプロイ
+# s3fs/deploy.yaml の endpoint を $MINIO_IP:9000 に書き換えてデプロイ
 ```
 
 ---
 
-## 10. クリーンアップ
+## クリーンアップ
 
 ```bash
 kubectl delete pod sshfs-fdpass-example -n oil-test

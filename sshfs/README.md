@@ -2,6 +2,32 @@
 
 このディレクトリは、FUSE CSI ドライバーを使って sshfs を利用するためのマニフェストを提供します。
 
+## この実装でできること
+
+- テナント Pod を非特権のまま SSH/SFTP ストレージをマウント
+- `volumeAttributes` の直編集だけで接続先を切り替え
+- CSI 側に特権処理を集約し、ユーザー側は最小権限を維持
+
+## アーキテクチャ（sshfs）
+
+```mermaid
+graph LR
+    CSI["fuse-csi-driver<br/>NodePublishVolume"]
+    Sidecar["sshfs-sidecar<br/>receiver + fusermount3-stub"]
+    SSH["SSH/SFTP Server"]
+    App["app container<br/>/data"]
+
+    CSI -- "FUSE fd (SCM_RIGHTS)" --> Sidecar
+    Sidecar -- "sshfs mount" --> SSH
+    App -- "read/write" --> Sidecar
+```
+
+### 処理フロー
+
+1. CSI が `NodePublishVolume` で FUSE fd を確保  
+2. `sshfs-sidecar` が fd を受信し `sshfs` を起動  
+3. app コンテナは `/data` を通常 I/O で利用
+
 ## 前提
 
 - クラスタ管理者が CSI ドライバーをデプロイ済み
@@ -31,16 +57,26 @@ kubectl create secret generic ssh-key \
 
 `deploy.yaml` の `volumeAttributes` を環境に合わせます。
 
-- `host`: SSH サーバーのホスト名/IP
-- `user`: SSH ユーザー
-- `remotePath`: リモートマウントパス
-- `port`: SSH ポート
-- `strictHostKeyCheck`: 本番は `accept-new` 推奨
+| キー | 必須 | 説明 | 例 |
+|---|---|---|---|
+| `host` | 必須 | SSH サーバーのホスト名/IP | `ssh-server.default.svc.cluster.local` |
+| `user` | 必須 | SSH ユーザー名 | `testuser` |
+| `remotePath` | 必須 | リモート側パス | `/data` |
+| `port` | 任意 | SSH ポート | `22` |
+| `strictHostKeyCheck` | 任意 | 本番は `accept-new` 推奨 | `accept-new` |
 
 ## 3. デプロイ
 
 ```bash
 kubectl apply -f sshfs/deploy.yaml -n <your-namespace>
+```
+
+プライベートレジストリ利用時は、Pod spec に `imagePullSecrets` を追加します。
+
+```yaml
+spec:
+  imagePullSecrets:
+    - name: ghcr-secret
 ```
 
 ## 4. 動作確認
@@ -50,6 +86,12 @@ kubectl get pod -n <your-namespace>
 kubectl logs <pod-name> -c sshfs-sidecar -n <your-namespace>
 kubectl exec <pod-name> -c app -n <your-namespace> -- mount | grep fuse
 kubectl exec <pod-name> -c app -n <your-namespace> -- ls -la /data
+```
+
+書き込み確認例:
+
+```bash
+kubectl exec <pod-name> -c app -n <your-namespace> -- sh -c 'echo hello > /data/healthcheck.txt && cat /data/healthcheck.txt'
 ```
 
 ## トラブルシュート
@@ -72,6 +114,12 @@ kubectl describe pod <pod-name> -n <your-namespace>
 kubectl logs <pod-name> -c sshfs-sidecar -n <your-namespace>
 kubectl logs -n fuse-csi-system -l app=fuse-csi-driver
 ```
+
+確認ポイント:
+
+- `nodePublishSecretRef.name` が `ssh-key` と一致しているか
+- `host` / `user` / `remotePath` の typo がないか
+- SSH サーバー側で公開鍵が許可されているか
 
 ## 関連
 

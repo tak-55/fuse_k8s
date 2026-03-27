@@ -2,6 +2,32 @@
 
 このディレクトリは、FUSE CSI ドライバーを使って s3fs を利用するためのマニフェストを提供します。
 
+## この実装でできること
+
+- テナント Pod を非特権のまま S3 互換ストレージをマウント
+- `volumeAttributes` の直編集だけで接続先を切り替え
+- CSI 側に特権処理を集約し、ユーザー側は最小権限を維持
+
+## アーキテクチャ（s3fs）
+
+```mermaid
+graph LR
+    CSI["fuse-csi-driver<br/>NodePublishVolume"]
+    Sidecar["s3fs-sidecar<br/>receiver + fusermount3-stub"]
+    S3["S3 Compatible Storage"]
+    App["app container<br/>/data"]
+
+    CSI -- "FUSE fd (SCM_RIGHTS)" --> Sidecar
+    Sidecar -- "s3fs mount" --> S3
+    App -- "read/write" --> Sidecar
+```
+
+### 処理フロー
+
+1. CSI が `NodePublishVolume` で FUSE fd を確保  
+2. `s3fs-sidecar` が fd を受信し `s3fs` を起動  
+3. app コンテナは `/data` を通常 I/O で利用
+
 ## 前提
 
 - クラスタ管理者が CSI ドライバーをデプロイ済み
@@ -29,15 +55,25 @@ kubectl create secret generic s3-credentials \
 
 `deploy.yaml` の `volumeAttributes` を環境に合わせます。
 
-- `bucket`: バケット名
-- `endpoint`: S3 互換エンドポイント（例: MinIO, AWS S3）
-- `region`: リージョン
-- `noCheckCert`: 自己署名証明書の場合は `true`
+| キー | 必須 | 説明 | 例 |
+|---|---|---|---|
+| `bucket` | 必須 | マウント対象バケット | `test-bucket` |
+| `endpoint` | 必須 | S3 API エンドポイント | `http://minio.default.svc.cluster.local:9000` |
+| `region` | 任意 | リージョン | `us-east-1` |
+| `noCheckCert` | 任意 | 自己署名証明書時は `true` | `false` |
 
 ## 3. デプロイ
 
 ```bash
 kubectl apply -f s3fs/deploy.yaml -n <your-namespace>
+```
+
+プライベートレジストリ利用時は、Pod spec に `imagePullSecrets` を追加します。
+
+```yaml
+spec:
+  imagePullSecrets:
+    - name: ghcr-secret
 ```
 
 ## 4. 動作確認
@@ -47,6 +83,12 @@ kubectl get pod -n <your-namespace>
 kubectl logs <pod-name> -c s3fs-sidecar -n <your-namespace>
 kubectl exec <pod-name> -c app -n <your-namespace> -- mount | grep fuse
 kubectl exec <pod-name> -c app -n <your-namespace> -- ls -la /data
+```
+
+書き込み確認例:
+
+```bash
+kubectl exec <pod-name> -c app -n <your-namespace> -- sh -c 'echo hello > /data/healthcheck.txt && cat /data/healthcheck.txt'
 ```
 
 ## トラブルシュート
@@ -66,6 +108,12 @@ kubectl describe pod <pod-name> -n <your-namespace>
 kubectl logs <pod-name> -c s3fs-sidecar -n <your-namespace>
 kubectl logs -n fuse-csi-system -l app=fuse-csi-driver
 ```
+
+確認ポイント:
+
+- `nodePublishSecretRef.name` が `s3-credentials` と一致しているか
+- `bucket` / `endpoint` / `region` の typo がないか
+- S3 側でアクセスキーに対象バケット権限があるか
 
 ## 関連
 
