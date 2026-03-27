@@ -106,7 +106,7 @@ kubectl apply -f policy/kyverno-force-securecontext.yaml
 ```bash
 # 新しいイメージタグを指定して更新
 kubectl set image daemonset/fuse-csi-driver \
-  fuse-csi-driver=ghcr.io/scaleworx-inc/fuse_k8s-fuse-csi-driver:<new-tag> \
+  fuse-csi-driver=ghcr.io/tak-labo/fuse_k8s-fuse-csi-driver:<new-tag> \
   -n fuse-csi-system
 
 # ロールアウト状況を監視

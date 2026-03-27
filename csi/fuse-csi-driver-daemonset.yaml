@@ -63,7 +63,7 @@ spec:
         # -----------------------------------------------------------------------
         - name: fuse-csi-driver
           # kind 環境: fuse-csi-driver:latest (kind load docker-image でロード)
-          # 本番:      ghcr.io/scaleworx-inc/fuse_k8s-fuse-csi-driver:latest
+          # 本番:      ghcr.io/tak-labo/fuse_k8s-fuse-csi-driver:latest
           image: fuse-csi-driver:latest
           imagePullPolicy: Never
           args:

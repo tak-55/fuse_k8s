@@ -71,7 +71,7 @@ spec:
         # ユーザー namespace には一切 privileged が不要になる
         # -----------------------------------------------------------------------
         - name: fuse-csi-driver
-          image: ghcr.io/scaleworx-inc/fuse_k8s-fuse-csi-driver:latest
+          image: ghcr.io/tak-labo/fuse_k8s-fuse-csi-driver:latest
           imagePullPolicy: Always
           args:
             - --endpoint=unix:/csi/csi.sock

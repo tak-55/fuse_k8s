@@ -282,8 +282,8 @@ kubectl create secret docker-registry ghcr-secret \
 
 push to `main` でマルチプラットフォームイメージ（linux/amd64 + linux/arm64）をビルドし公開：
 
-- `ghcr.io/scaleworx-inc/fuse_k8s-sshfs:latest`
-- `ghcr.io/scaleworx-inc/fuse_k8s-s3fs:latest`
+- `ghcr.io/tak-labo/fuse_k8s-sshfs:latest`
+- `ghcr.io/tak-labo/fuse_k8s-s3fs:latest`
 
 タグ形式：`latest`（main ブランチ）、`YYYYMMDD-{sha}`
 

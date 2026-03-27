@@ -45,7 +45,7 @@ spec:
     # sshfs-sidecar: FUSE fd を受け取り sshfs を起動するサイドカー
     # restartPolicy: Always → sidecar initContainer（app より先に起動、app と並行して稼働）
     - name: sshfs-sidecar
-      image: ghcr.io/scaleworx-inc/fuse_k8s-sshfs-sidecar:latest
+      image: ghcr.io/tak-labo/fuse_k8s-sshfs-sidecar:latest
       imagePullPolicy: Always
       restartPolicy: Always
       # readinessProbe が通過するまで app コンテナの起動を待機する
