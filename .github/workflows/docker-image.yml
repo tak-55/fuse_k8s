@@ -43,6 +43,42 @@ jobs:
             platform: linux/arm64
             platform-short: arm64
             runner: ubuntu-24.04-arm
+          - component: fuse-csi-driver
+            context: ./fuse-csi-driver
+            image-suffix: fuse-csi-driver
+            platform: linux/amd64
+            platform-short: amd64
+            runner: ubuntu-24.04
+          - component: fuse-csi-driver
+            context: ./fuse-csi-driver
+            image-suffix: fuse-csi-driver
+            platform: linux/arm64
+            platform-short: arm64
+            runner: ubuntu-24.04-arm
+          - component: sshfs-sidecar
+            context: ./sshfs-sidecar
+            image-suffix: sshfs-sidecar
+            platform: linux/amd64
+            platform-short: amd64
+            runner: ubuntu-24.04
+          - component: sshfs-sidecar
+            context: ./sshfs-sidecar
+            image-suffix: sshfs-sidecar
+            platform: linux/arm64
+            platform-short: arm64
+            runner: ubuntu-24.04-arm
+          - component: s3fs-sidecar
+            context: ./s3fs-sidecar
+            image-suffix: s3fs-sidecar
+            platform: linux/amd64
+            platform-short: amd64
+            runner: ubuntu-24.04
+          - component: s3fs-sidecar
+            context: ./s3fs-sidecar
+            image-suffix: s3fs-sidecar
+            platform: linux/arm64
+            platform-short: arm64
+            runner: ubuntu-24.04-arm
 
     steps:
       - name: Checkout repository
@@ -101,6 +137,9 @@ jobs:
         include:
           - image-suffix: s3fs
           - image-suffix: sshfs
+          - image-suffix: fuse-csi-driver
+          - image-suffix: sshfs-sidecar
+          - image-suffix: s3fs-sidecar
 
     steps:
       - name: Download digests
