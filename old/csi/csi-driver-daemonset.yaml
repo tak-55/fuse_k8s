@@ -1,0 +1,151 @@
+# meta-fuse-csi-plugin: DaemonSet（各ノードに特権コンテナとしてデプロイ）
+# CAP_SYS_ADMINはこのDaemonSetのみが持ち、ユーザーPodは不要
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: meta-fuse-csi-plugin
+  namespace: mfcp-system
+  labels:
+    app.kubernetes.io/name: meta-fuse-csi-plugin
+    app.kubernetes.io/component: node
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: meta-fuse-csi-plugin-node
+  labels:
+    app.kubernetes.io/name: meta-fuse-csi-plugin
+    app.kubernetes.io/component: node
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: meta-fuse-csi-plugin-node
+  labels:
+    app.kubernetes.io/name: meta-fuse-csi-plugin
+    app.kubernetes.io/component: node
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: meta-fuse-csi-plugin-node
+subjects:
+  - kind: ServiceAccount
+    name: meta-fuse-csi-plugin
+    namespace: mfcp-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: meta-fuse-csi-plugin
+  namespace: mfcp-system
+  labels:
+    app.kubernetes.io/name: meta-fuse-csi-plugin
+    app.kubernetes.io/component: node
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: meta-fuse-csi-plugin
+      app.kubernetes.io/component: node
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: meta-fuse-csi-plugin
+        app.kubernetes.io/component: node
+    spec:
+      serviceAccountName: meta-fuse-csi-plugin
+      # Linuxノードのみ対象
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+        - key: "node-role.kubernetes.io/master"
+          operator: "Exists"
+          effect: "NoSchedule"
+        - key: "node-role.kubernetes.io/control-plane"
+          operator: "Exists"
+          effect: "NoSchedule"
+      containers:
+        - name: csi-driver
+          # CSIドライバのメインコンテナ（ghcr.io公式イメージを使用）
+          image: ghcr.io/pfnet-research/meta-fuse-csi-plugin/meta-fuse-csi-plugin:v0.2.2
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--v=5"
+            - "--endpoint=unix:/csi/csi.sock"
+            - "--nodeid=$(NODE_ID)"
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            # FUSEマウントに必要な特権 (CAP_SYS_ADMIN)
+            # ユーザーPod側には付与不要
+            privileged: true
+            runAsNonRoot: false
+          volumeMounts:
+            # CSI ソケットディレクトリ
+            - name: socket-dir
+              mountPath: /csi
+            # kubelet PluginのRegistrationパス
+            - name: registration-dir
+              mountPath: /registration
+            # ホスト全体のマウント伝播のため（bidirectional）
+            - name: kubelet-dir
+              mountPath: /var/lib/kubelet
+              mountPropagation: Bidirectional
+            # FUSEデバイス
+            - name: dev-fuse
+              mountPath: /dev/fuse
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+
+        - name: node-driver-registrar
+          # kubelet plugin registrar: CSIソケットをkubeletに登録する
+          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.0
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: false
+          args:
+            - "--csi-address=/csi/csi.sock"
+            - "--kubelet-registration-path=/var/lib/kubelet/plugins/meta-fuse-csi-plugin.csi.storage.pfn.io/csi.sock"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            - name: registration-dir
+              mountPath: /registration
+          resources:
+            requests:
+              cpu: 10m
+              memory: 20Mi
+            limits:
+              cpu: 50m
+              memory: 100Mi
+
+      volumes:
+        - name: socket-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/meta-fuse-csi-plugin.csi.storage.pfn.io
+            type: DirectoryOrCreate
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: Directory
+        - name: kubelet-dir
+          hostPath:
+            path: /var/lib/kubelet
+            type: Directory
+        - name: dev-fuse
+          hostPath:
+            path: /dev/fuse
