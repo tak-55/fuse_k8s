@@ -6,13 +6,13 @@
 
 ---
 
-## 1. 背景と目的
+## 背景と目的
 
-### 1.1 背景
+### 背景
 
 sshfs は SSH プロトコル上の **SFTP サブシステム**を利用してリモートファイルシステムをマウントする。SSH サーバーをシェルアクセスなしの SFTP 専用サーバーとして構成し、さらに `ChrootDirectory` で各ユーザーのアクセス範囲を制限することは、本番運用における標準的なセキュリティ対策である。
 
-### 1.2 目的
+### 目的
 
 - fuse-csi-driver が接続する SSH サーバーを SFTP + chroot 構成で設計・検証する
 - シェルアクセスを排除し、ユーザーが chroot 外のファイルシステムを参照できないことを保証する
@@ -20,7 +20,7 @@ sshfs は SSH プロトコル上の **SFTP サブシステム**を利用して�
 
 ---
 
-## 2. 要件
+## 要件
 
 | ID | 要件 |
 |----|------|
@@ -32,9 +32,9 @@ sshfs は SSH プロトコル上の **SFTP サブシステム**を利用して�
 
 ---
 
-## 3. アーキテクチャ
+## アーキテクチャ
 
-### 3.1 全体フロー
+### 全体フロー
 
 ```
 [User Pod - test-tenant-ns]
@@ -59,7 +59,7 @@ sshfs は SSH プロトコル上の **SFTP サブシステム**を利用して�
   /chroot/testuser/data/   testuser   755  ← sshfs がマウントするパス
 ```
 
-### 3.2 ChrootDirectory の制約
+### ChrootDirectory の制約
 
 OpenSSH の `ChrootDirectory` には以下のカーネル要件がある:
 
@@ -71,7 +71,7 @@ OpenSSH の `ChrootDirectory` には以下のカーネル要件がある:
 
 これは OpenSSH が chroot 後のジェイルが改ざんされないことを保証するための要件である。
 
-### 3.3 remotePath とパスの対応
+### remotePath とパスの対応
 
 ```
 sshfs から見えるパス   実ファイルシステム上のパス
@@ -87,9 +87,9 @@ remotePath: "/data"   # chroot 内のパスを指定
 
 ---
 
-## 4. SSH サーバー構成
+## SSH サーバー構成
 
-### 4.1 sshd_config
+### sshd_config
 
 ```
 Port 2222
@@ -123,7 +123,7 @@ Match User testuser
 
 `internal-sftp` は chroot 環境で `/dev/log` や `/proc` が不要なため、最小権限の chroot 構成に適している。
 
-### 4.2 chroot ディレクトリ構造
+### chroot ディレクトリ構造
 
 ```
 /chroot/
@@ -159,9 +159,9 @@ ssh-keygen -t ed25519 -f /etc/ssh/host_keys/ssh_host_ed25519_key -N ""
 
 ---
 
-## 5. fuse-csi-driver 側の設定
+## fuse-csi-driver 側の設定
 
-### 5.1 volumeAttributes
+### volumeAttributes
 
 ```yaml
 volumeAttributes:
@@ -173,7 +173,7 @@ volumeAttributes:
   strictHostKeyCheck: "false"   # テスト環境：ホスト鍵検証をスキップ
 ```
 
-### 5.2 SSH 秘密鍵 Secret
+### SSH 秘密鍵 Secret
 
 ```bash
 # 注意: --from-file を使うこと。--from-literal はシェル展開で末尾改行を除去するため
@@ -185,9 +185,9 @@ kubectl create secret generic ssh-key \
 
 ---
 
-## 6. セキュリティ考慮事項
+## セキュリティ考慮事項
 
-### 6.1 chroot による隔離
+### chroot による隔離
 
 | 脅威 | 対策 |
 |------|------|
@@ -196,13 +196,13 @@ kubectl create secret generic ssh-key \
 | ユーザーが chroot 外にエスケープする | chroot root を root 所有・755 にすることで chroot 破りを防止 |
 | パスワード総当たり | `PasswordAuthentication no` で無効化 |
 
-### 6.2 CSI driver 側のセキュリティ
+### CSI driver 側のセキュリティ
 
 - SSH 秘密鍵は Kubernetes Secret として管理（`nodePublishSecretRef`）
 - 秘密鍵は CSI driver が一時ファイルに書き出し（`CreateTemp`）、プロセス終了後に削除
 - 秘密鍵は emptyDir には書かれない（UDS 経由で直接 sshfs-sidecar に渡す）
 
-### 6.3 sshfs マウントオプション
+### sshfs マウントオプション
 
 ```
 -o allow_other    # FUSE: UID 0 以外のプロセス（uid 1000）からのアクセスを許可
@@ -213,9 +213,9 @@ kubectl create secret generic ssh-key \
 
 ---
 
-## 7. 既知の制約
+## 既知の制約
 
-### 7.1 FUSE CSI ボリュームと hostUsers: false の非互換
+### FUSE CSI ボリュームと hostUsers: false の非互換
 
 | 項目 | 詳細 |
 |------|------|
@@ -226,7 +226,7 @@ kubectl create secret generic ssh-key \
 
 virtiofs（VM ベース FUSE）は `MOUNT_ATTR_IDMAP` に対応しているが、`/dev/fuse` 経由の FUSE は kernel 6.8 時点でも非対応。
 
-### 7.2 Secret の作成方法
+### Secret の作成方法
 
 SSH 秘密鍵は `--from-file` で作成すること。`--from-literal` はシェル展開で末尾改行を除去するため、OpenSSH が `error in libcrypto` で鍵を読み込めない。
 
@@ -241,7 +241,7 @@ kubectl create secret generic ssh-key \
   -n <namespace>
 ```
 
-### 7.3 sshfs-sidecar と app コンテナの起動順序
+### sshfs-sidecar と app コンテナの起動順序
 
 FUSE CSI ドライバが `NodePublishVolume` で FUSE マウントを作成した時点では、FUSE デーモン（sshfs）が未起動のため、bind mount 時に runc が 2分タイムアウトする場合がある。
 
@@ -256,11 +256,11 @@ initContainers:
         command: ["test", "-f", "/fuse-fd/ready"]
 ```
 
-## 8. テスト環境（kind）セットアップ
+## テスト環境（kind）セットアップ
 
-### 7.1 SSH サーバー Pod
+### SSH サーバー Pod
 
-`csi/test-ssh-server.yaml` として管理する（→ セクション 8 参照）。
+`tests/test-ssh-server.yaml` として管理する（→ セクション 8 参照）。
 
 デプロイ手順:
 ```bash
@@ -271,18 +271,18 @@ ssh-keygen -t ed25519 -f /tmp/test-sshkey -N ""
 kubectl create configmap sshd-authorized-keys \
   --from-file=authorized_keys=/tmp/test-sshkey.pub \
   -n default
-kubectl apply -f csi/test-ssh-server.yaml
+kubectl apply -f tests/test-ssh-server.yaml
 
 # 3. 秘密鍵を テナント namespace の Secret に登録
 kubectl create secret generic ssh-key \
-  --from-literal=private_key="$(cat /tmp/test-sshkey)" \
+  --from-file=private_key=/tmp/test-sshkey \
   -n test-tenant-ns
 
 # 4. テスト Pod デプロイ
-kubectl apply -f sshfs/deploy-kind-fdpass.yaml -n test-tenant-ns
+kubectl apply -f sshfs/deploy.yaml -n test-tenant-ns
 ```
 
-### 7.2 期待される動作確認
+### 期待される動作確認
 
 ```bash
 # CSI driver ログ
@@ -298,13 +298,12 @@ kubectl exec <pod> -n test-tenant-ns -c app -- sh -c 'echo test > /data/hello.tx
 
 ---
 
-## 8. 関連ファイル
+## 関連ファイル
 
 | ファイル | 説明 |
 |----------|------|
-| `csi/test-ssh-server.yaml` | テスト用 SSH サーバー（SFTP + chroot）の K8s マニフェスト |
-| `sshfs/deploy-kind-fdpass.yaml` | fd-passing + sshfs-sidecar のテスト Pod |
-| `sshfs/deploy-kind-fdpass.yaml` | fd-passing + sshfs-sidecar のテスト Pod（kind 用） |
+| `tests/test-ssh-server.yaml` | テスト用 SSH サーバー（SFTP + chroot）の K8s マニフェスト |
+| `sshfs/deploy.yaml` | fd-passing + sshfs-sidecar のテスト Pod |
 | `sshfs-sidecar/receiver/main.go` | sshfs-sidecar のエントリポイント |
 | `sshfs-sidecar/fusermount3-stub/main.go` | libfuse の fusermount3 インターセプト |
 | `fuse-csi-driver/pkg/driver/fdpassing.go` | fd-passing の CSI driver 側実装 |
