@@ -14,7 +14,7 @@ fuse-csi-driver を kind ローカル環境で構築・テストする手順。
 
 ---
 
-## kind クラスター作成
+## 1. kind クラスター作成
 
 ```bash
 # クラスター作成（fuse-overlayfs snapshotter 設定込み）
@@ -41,7 +41,7 @@ kubectl get nodes
 
 ---
 
-## Capsule v0.10.8 インストール
+## 2. Capsule v0.10.8 インストール
 
 ```bash
 # Helm リポジトリ追加
@@ -64,7 +64,7 @@ kubectl wait --for=condition=Ready pod \
 
 ---
 
-## Kyverno v1.15.2 インストール
+## 3. Kyverno v1.15.2 インストール
 
 ```bash
 # Helm リポジトリ追加
@@ -89,7 +89,7 @@ kubectl wait --for=condition=Ready pod \
 
 ---
 
-## イメージのビルドと kind へのロード
+## 4. イメージのビルドと kind へのロード
 
 ```bash
 # リポジトリルートに移動
@@ -113,7 +113,7 @@ docker exec fuse-dev-control-plane crictl images | grep -E "fuse-csi-driver|sshf
 
 ---
 
-## fuse-csi-driver のデプロイ
+## 5. fuse-csi-driver のデプロイ
 
 ```bash
 # Namespace + CSIDriver リソース
@@ -145,7 +145,7 @@ kubectl get csidriver fuse.csi.fuse-k8s.io
 
 ---
 
-## Capsule Tenant + Kyverno ポリシーの適用
+## 6. Capsule Tenant + Kyverno ポリシーの適用
 
 ```bash
 # Capsule ユーザーの作成（テスト用）
@@ -167,7 +167,7 @@ kubectl get tenant
 
 ---
 
-## テナント namespace の作成
+## 7. テナント namespace の作成
 
 ```bash
 # example-user として namespace を作成
@@ -204,7 +204,7 @@ oil-test   Active   capsule.clastix.io/tenant=example-tenant,
 
 ---
 
-## Capsule ポリシー強制テスト
+## 7.1 Capsule ポリシー強制テスト
 
 Capsule が PSS restricted を正しく強制しているか確認する。
 
@@ -256,7 +256,7 @@ kubectl delete pod privileged-test -n default
 
 ---
 
-## Kyverno ミューテーション単体テスト
+## 7.2 Kyverno ミューテーション単体テスト
 
 sshfs Pod をデプロイする前に、Kyverno のミューテーションが正しく動作するか確認する。
 
@@ -312,7 +312,7 @@ kubectl delete pod mutation-test -n oil-test
 
 ---
 
-## SSH 秘密鍵の準備（sshfs テスト用）
+## 8. SSH 秘密鍵の準備（sshfs テスト用）
 
 テスト用に SSH キーペアを作成する。外部 SSH サーバーが使えない場合は簡易 SSHD を kind 内に立てる。
 
@@ -331,7 +331,7 @@ kubectl create secret generic ssh-key \
 
 ### パターン B: kind 内に SFTP+chroot SSH サーバーを立てる
 
-`tests/test-ssh-server.yaml` で管理される本番相当の SFTP+ChrootDirectory 構成を使う。
+`csi/test-ssh-server.yaml` で管理される本番相当の SFTP+ChrootDirectory 構成を使う。
 設計詳細は [docs/design-sftp-chroot-ssh-server.md](design-sftp-chroot-ssh-server.md) を参照。
 
 ```bash
@@ -344,7 +344,7 @@ kubectl create configmap sshd-authorized-keys \
   -n default
 
 # SSH サーバー Pod をデプロイ
-kubectl apply -f tests/test-ssh-server.yaml
+kubectl apply -f csi/test-ssh-server.yaml
 
 # 起動待ち（initContainer がホスト鍵生成 + chroot セットアップを行う）
 kubectl wait --for=condition=Ready pod/ssh-server -n default --timeout=120s
@@ -374,7 +374,7 @@ kubectl create secret generic ssh-key \
 
 ---
 
-## sshfs テスト Pod のデプロイと確認
+## 9. sshfs テスト Pod のデプロイと確認
 
 > **kind 環境と `hostUsers: false` の対応状況**:
 >
@@ -392,7 +392,7 @@ kubectl create secret generic ssh-key \
 
 ```bash
 # fd-passing 用マニフェストをコピーして編集
-cp sshfs/deploy-kind.yaml /tmp/sshfs-test.yaml
+cp sshfs/deploy-kind-fdpass.yaml /tmp/sshfs-test.yaml
 
 # host / user / remotePath を実環境に合わせて編集
 vi /tmp/sshfs-test.yaml
@@ -406,9 +406,9 @@ kubectl wait --for=condition=Ready pod/sshfs-fdpass-example -n default --timeout
 
 ---
 
-## 動作確認テスト
+## 10. 動作確認テスト
 
-### Kyverno ミューテーション確認（oil-test namespace）
+### 10-1. Kyverno ミューテーション確認（oil-test namespace）
 
 Kyverno ポリシーの確認は `oil-test` namespace でテスト Pod を使って行う（ステップ 7.2 参照）。
 
@@ -429,7 +429,7 @@ runAsNonRoot=true
 > **注意**: `hostUsers: false` が注入された Pod は kind on macOS では起動しない（制約）。
 > ミューテーションが正しく機能していることの確認のみ行う。
 
-### FUSE マウント確認（default namespace）
+### 10-2. FUSE マウント確認（default namespace）
 
 kind では PSS/Kyverno なしの `default` namespace で FUSE マウント機能を確認する。
 
@@ -439,7 +439,7 @@ kubectl exec -n default sshfs-fdpass-example -- mount | grep fuse
 
 期待結果: `fuse.sshfs on /data type fuse (rw,...)` が表示される
 
-### UID 確認と書き込みテスト
+### 10-3. UID 確認と書き込みテスト
 
 ```bash
 kubectl exec -n default sshfs-fdpass-example -- sh -c '
@@ -456,7 +456,7 @@ kubectl exec -n default sshfs-fdpass-example -- sh -c '
 > kind では Kyverno が適用されないため uid=0 で動作する。
 > uid=1000 + hostUsers: false の組み合わせは k3s 環境で確認する。
 
-### PSS restricted 違反がないことを確認（oil-test）
+### 10-4. PSS restricted 違反がないことを確認（oil-test）
 
 ```bash
 kubectl get events -n oil-test | grep -i "policy\|forbidden\|violation"
@@ -464,7 +464,7 @@ kubectl get events -n oil-test | grep -i "policy\|forbidden\|violation"
 
 期待結果: PSS 関連のエラーイベントなし（`hostUsers: false` 起因のエラーを除く）
 
-### CSI driver ログ確認
+### 10-5. CSI driver ログ確認
 
 ```bash
 kubectl logs -n fuse-csi-system -l app=fuse-csi-driver -c fuse-csi-driver --tail=20
@@ -472,7 +472,7 @@ kubectl logs -n fuse-csi-system -l app=fuse-csi-driver -c fuse-csi-driver --tail
 
 期待結果: `NodePublishVolume: targetPath=... type=sshfs` のログが出力される
 
-### サイドカーログ確認
+### 10-6. サイドカーログ確認
 
 ```bash
 kubectl logs -n default sshfs-fdpass-example -c sshfs-sidecar
@@ -488,15 +488,15 @@ sshfs 起動: ...
 
 ---
 
-## クリーンアップ
+## 11. クリーンアップ
 
 ```bash
 # テスト Pod 削除（default namespace）
 kubectl delete pod sshfs-fdpass-example -n default 2>/dev/null || true
 
 # SSHD テストサーバー削除（パターン B を使った場合）
-kubectl delete pod ssh-server -n default
-kubectl delete svc ssh-server -n default
+kubectl delete pod sshd-test -n default
+kubectl delete svc sshd-svc -n default
 
 # Tenant 削除
 kubectl delete -f policy/capsule-tenant-example.yaml

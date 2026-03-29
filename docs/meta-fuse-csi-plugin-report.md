@@ -1,7 +1,4 @@
 # 概要
-
-> **アーカイブ注記**: この文書は旧 `meta-fuse-csi-plugin` の調査記録です。現行運用手順ではありません。現行アーキテクチャの導入・運用は `README.md` と `docs/implementation-guide.md` を参照してください。
-
 本報告書は、FUSE 向け汎用CSIドライバであるmeta-fuse-csi-pluginについて、技術情報を整理した調査報告書です。
 
 # meta-fuse-csi-plugin とは

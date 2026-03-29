@@ -17,7 +17,7 @@ fuse-csi-driver + Capsule + Kyverno の本番環境における
 
 ---
 
-## Tenant の作成
+## 1. Tenant の作成
 
 ユーザーのプロジェクト（チーム）ごとに Capsule Tenant を作成する。
 
@@ -68,7 +68,7 @@ kubectl delete tenant <tenant-name>
 
 ---
 
-## Kyverno ポリシーの管理
+## 2. Kyverno ポリシーの管理
 
 ### ポリシーの状態確認
 
@@ -99,7 +99,7 @@ kubectl apply -f policy/kyverno-force-securecontext.yaml
 
 ---
 
-## fuse-csi-driver の更新
+## 3. fuse-csi-driver の更新
 
 ### イメージの更新（ローリングアップデート）
 
@@ -128,7 +128,7 @@ kubectl apply -f csi/fuse-csi-driver-daemonset-prod.yaml
 
 ---
 
-## モニタリング
+## 4. モニタリング
 
 ### CSI driver のログ確認
 
@@ -173,7 +173,7 @@ kubectl logs -n fuse-csi-system -l app=fuse-csi-driver \
 
 ---
 
-## ユーザー Pod の強制停止とリソース回収
+## 5. ユーザー Pod の強制停止とリソース回収
 
 Pod 削除時に CSI driver が自動でアンマウント・クリーンアップを実行する。
 
@@ -199,7 +199,7 @@ fusermount3 -u $TARGET_PATH || umount $TARGET_PATH
 
 ---
 
-## 証明書・Secret の管理方針
+## 6. 証明書・Secret の管理方針
 
 - SSH 秘密鍵・S3 認証情報は**ユーザーが各自のテナント namespace に作成**する
 - 管理者は Secret の内容を管理しない（最小権限の原則）
@@ -208,7 +208,7 @@ fusermount3 -u $TARGET_PATH || umount $TARGET_PATH
 
 ---
 
-## CSI driver の障害対応
+## 7. CSI driver の障害対応
 
 ### DaemonSet Pod が CrashLoopBackOff
 
@@ -251,7 +251,7 @@ kubectl get csidriver fuse.csi.fuse-k8s.io -o yaml
 
 ---
 
-## バックアップ・災害復旧
+## 8. バックアップ・災害復旧
 
 fuse-csi-driver は**ステートレス**（マウント情報はメモリ上のみ）。
 
@@ -274,7 +274,7 @@ kubectl delete pods --all -n <tenant-ns>
 
 ---
 
-## アップグレード手順（Capsule / Kyverno）
+## 9. アップグレード手順（Capsule / Kyverno）
 
 ### Capsule アップグレード
 

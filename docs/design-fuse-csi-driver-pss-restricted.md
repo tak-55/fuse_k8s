@@ -6,26 +6,26 @@
 
 ---
 
-## 背景と目的
+## 1. 背景と目的
 
-### 背景
+### 1.1 背景
 
-旧 sidecar 方式では、ユーザー Pod 側コンテナに `privileged: true` が必要となり、Pod Security Standards (PSS) の `restricted` プロファイルと両立しない課題があった。
+現在の実装（meta-fuse-csi-plugin + sidecar 方式）では、ユーザー Pod の sidecar コンテナに `privileged: true` が必須となっている。これは `mountPropagation: Bidirectional` が Kubernetes の仕様上 `privileged: true` を要求するためであり、Pod Security Standards (PSS) の `restricted` プロファイルと根本的に相容れない。
 
 Kubernetes クラスターを Capsule + Kyverno によるマルチテナント環境として運用する場合、テナント内の全 namespace に PSS restricted が適用されるため、現行方式ではユーザーが FUSE ファイルシステムを利用できない。
 
-### 目的
+### 1.2 目的
 
 - ユーザー Pod（sidecar・app コンテナとも）を `privileged: false` で動作させる
-- Capsule / Kyverno によって強制される PSS restricted に準拠する
+- Capsule / Kyverno によって強制される PSS restricted / `hostUsers: false` に準拠する
 - 10〜50 ユーザーの並列 FUSE マウントを管理者管理の CSI DaemonSet で提供する
 - sshfs（SSH リモートファイルシステム）と s3fs（S3 互換ストレージ）の両方に対応する
 
 ---
 
-## 要件
+## 2. 要件
 
-### 機能要件
+### 2.1 機能要件
 
 | ID | 要件 |
 |----|------|
@@ -35,18 +35,18 @@ Kubernetes クラスターを Capsule + Kyverno によるマルチテナント�
 | F-04 | 10〜50 ユーザーの並列マウントを同一ノード上で管理できる |
 | F-05 | Pod 削除時に FUSE プロセスが正常にクリーンアップされる |
 
-### セキュリティ要件
+### 2.2 セキュリティ要件
 
 | ID | 要件 |
 |----|------|
 | S-01 | ユーザー Pod（sidecar・app）は `privileged: false` で動作する |
 | S-02 | ユーザー Pod は PSS `restricted` プロファイルに準拠する |
-| S-03 | `hostUsers: false` は通常 Pod に Kyverno が注入し、FUSE CSI volume Pod は注入スキップされる |
+| S-03 | `hostUsers: false`（ユーザー名前空間）が Kyverno によって強制される |
 | S-04 | ユーザー Pod の securityContext は Kyverno が自動注入する（ユーザーが書く必要なし） |
 | S-05 | 認証情報（SSH 秘密鍵・S3 認証情報）は Kubernetes Secret 経由で渡す |
 | S-06 | テナント間のマウント分離が保証される（他テナントのマウントにアクセス不可） |
 
-### 非機能要件
+### 2.3 非機能要件
 
 | ID | 要件 |
 |----|------|
@@ -56,9 +56,9 @@ Kubernetes クラスターを Capsule + Kyverno によるマルチテナント�
 
 ---
 
-## アーキテクチャ
+## 3. アーキテクチャ
 
-### 全体構成
+### 3.1 全体構成
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -68,7 +68,7 @@ Kubernetes クラスターを Capsule + Kyverno によるマルチテナント�
 │  │  Capsule / Kyverno (クラスター管理者が管理)                │    │
 │  │  - Tenant ごとに namespace を管理                         │    │
 │  │  - PSS restricted ラベルを namespace に自動付与           │    │
-│  │  - hostUsers:false を通常 Pod に注入（FUSE Pod は除外） │    │
+│  │  - hostUsers: false を全テナント Pod に強制               │    │
 │  │  - runAsNonRoot / seccompProfile 等を自動注入             │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                                                                  │
@@ -83,7 +83,7 @@ Kubernetes クラスターを Capsule + Kyverno によるマルチテナント�
 │  │  NodePublishVolume()  │   │  - app コンテナ              │   │
 │  │  → /dev/fuse open     │   │    UID: 1000 (Kyverno注入)   │   │
 │  │  → mount(2)           │   │    /data ← FUSE マウント      │   │
-│  │  → UDS で fd 送信     │   │  - hostUsers: (未設定)       │   │
+│  │  → UDS で fd 送信     │   │  - hostUsers: false          │   │
 │  └───────────────────────┘   └──────────────────────────────┘   │
 │           ↑                                ↑                     │
 │    CSI NodePublishVolume           kubelet bind-mount            │
@@ -91,13 +91,13 @@ Kubernetes クラスターを Capsule + Kyverno によるマルチテナント�
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### 現行方式との比較
+### 3.2 現行方式との比較
 
-| 項目 | 旧方式（sidecar 方式） | 現行方式（CSI 内蔵） |
+| 項目 | 現行（sidecar 方式） | 新方式（CSI 内蔵） |
 |------|--------------------|--------------------|
 | ユーザー Pod sidecar | `privileged: true` 必須 | **sshfs/s3fs-sidecar（非特権）** |
 | ユーザー Pod securityContext | 手動設定 | **Kyverno が自動注入** |
-| `hostUsers: false` | なし | **Kyverno が通常 Pod に自動注入（FUSE Pod は除外）** |
+| `hostUsers: false` | なし | **Kyverno が自動強制** |
 | PSS restricted | ❌ 不可 | ✅ 準拠 |
 | `mountPropagation: Bidirectional` | ユーザー Pod に必要 | **CSI DaemonSet のみ** |
 | fusermount3-proxy | 必要 | **不要** |
@@ -106,14 +106,14 @@ Kubernetes クラスターを Capsule + Kyverno によるマルチテナント�
 | マルチユーザー設計 | なし | **50 並列対応** |
 | テナント分離 | なし | **Capsule Tenant** |
 
-### マウント処理フロー
+### 3.3 マウント処理フロー
 
 ```
 ユーザーが Pod を作成
     │
     ▼
 Kyverno が Pod spec をミューテーション
-  - spec.hostUsers: false を注入（FUSE CSI volume Pod はスキップ）
+  - spec.hostUsers: false を注入
   - runAsNonRoot: true, runAsUser: 1000 を注入
   - allowPrivilegeEscalation: false, capabilities.drop: ALL を注入
     │
@@ -152,9 +152,9 @@ Pod 削除時
 
 ---
 
-## コンポーネント設計
+## 4. コンポーネント設計
 
-### CSI Driver (Go)
+### 4.1 CSI Driver (Go)
 
 **ドライバー名**: `fuse.csi.fuse-k8s.io`
 
@@ -205,7 +205,7 @@ type mountInfo struct {
 }
 ```
 
-### sshfs マウントオプション
+### 4.2 sshfs マウントオプション
 
 | オプション | 値 | 理由 |
 |-----------|-----|------|
@@ -216,7 +216,7 @@ type mountInfo struct {
 | `-o umask=000` | （フラグ） | hostUsers: false 環境で host UID 0 がコンテナ内で unmapped になるため、全 UID に rwxrwxrwx を付与 |
 | `-f` | （フラグ） | フォアグラウンド起動（プロセス管理のため必須） |
 
-### s3fs マウントオプション
+### 4.3 s3fs マウントオプション
 
 | オプション | 値 | 理由 |
 |-----------|-----|------|
@@ -229,7 +229,7 @@ type mountInfo struct {
 | `-o no_check_certificate` | 条件付き | 自己署名証明書環境（`noCheckCert: "true"` のとき） |
 | `-f` | （フラグ） | フォアグラウンド起動 |
 
-### CSIDriver リソース
+### 4.4 CSIDriver リソース
 
 ```yaml
 apiVersion: storage.k8s.io/v1
@@ -243,7 +243,7 @@ spec:
     - Ephemeral              # エフェメラルボリュームのみサポート
 ```
 
-### CSI DaemonSet リソース要件
+### 4.5 CSI DaemonSet リソース要件
 
 マルチユーザー（最大 50 名）を想定したリソース設計:
 
@@ -256,9 +256,9 @@ spec:
 
 ---
 
-## インターフェース設計
+## 5. インターフェース設計
 
-### ユーザー Pod の CSI ボリューム定義
+### 5.1 ユーザー Pod の CSI ボリューム定義
 
 ユーザーが書く Pod マニフェストのボリューム定義:
 
@@ -297,7 +297,7 @@ volumes:
         name: s3-credentials
 ```
 
-### Secret 形式
+### 5.2 Secret 形式
 
 **sshfs 用**:
 
@@ -318,7 +318,7 @@ kubectl create secret generic s3-credentials \
   -n <tenant-namespace>
 ```
 
-### volumeAttributes パラメータ一覧
+### 5.3 volumeAttributes パラメータ一覧
 
 | パラメータ | 対象 | 必須 | デフォルト | 説明 |
 |-----------|------|------|----------|------|
@@ -335,9 +335,9 @@ kubectl create secret generic s3-credentials \
 
 ---
 
-## セキュリティ設計
+## 6. セキュリティ設計
 
-### 権限分離
+### 6.1 権限分離
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -352,7 +352,7 @@ kubectl create secret generic s3-credentials \
 ┌─────────────────────────────────────────────────────────┐
 │  ユーザーが管理するコンポーネント          unprivileged │
 │  - User Pod (テナント namespace)                         │
-│    - hostUsers: 通常 Pod のみ false 注入（FUSE Pod は除外） │
+│    - hostUsers: false（Kyverno が強制）                 │
 │    - runAsNonRoot: true, runAsUser: 1000                  │
 │    - allowPrivilegeEscalation: false                     │
 │    - capabilities.drop: ALL                              │
@@ -360,7 +360,7 @@ kubectl create secret generic s3-credentials \
 └─────────────────────────────────────────────────────────┘
 ```
 
-### hostUsers: false によるユーザー名前空間分離
+### 6.2 hostUsers: false によるユーザー名前空間分離
 
 `hostUsers: false` を有効にすることで、コンテナ内の UID がホスト上の別の UID にマッピングされる。
 
@@ -371,7 +371,7 @@ kubectl create secret generic s3-credentials \
 
 これにより、コンテナ内でルート権限に昇格しても、ホスト上では非特権ユーザーとなり、ホストへの影響が限定される。
 
-### FUSE マウントのアクセス制御
+### 6.3 FUSE マウントのアクセス制御
 
 CSI DaemonSet（host UID 0）がマウントした FUSE ファイルシステムに、`hostUsers: false` な user-namespaced コンテナからアクセスするための設定:
 
@@ -388,14 +388,14 @@ CSI DaemonSet → sshfs/s3fs を -o allow_other -o umask=000 でマウント
                                  パーミッション 777 → UID 1000 から読み書き可
 ```
 
-### 認証情報の保護
+### 6.4 認証情報の保護
 
 - SSH 秘密鍵・S3 認証情報は Kubernetes Secret に保存
 - CSI driver が `nodePublishSecretRef` 経由で受け取り、一時ファイルに書き出す
 - 一時ファイルは NodeUnpublishVolume 時に必ず削除（`defer os.Remove(keyFile)`）
 - 一時ファイルのパーミッションは 0600
 
-### テナント分離
+### 6.5 テナント分離
 
 - 各 Pod の CSI エフェメラルボリュームは、kubelet が管理する Pod 固有のパス（`/var/lib/kubelet/pods/<pod-uid>/...`）にマウントされる
 - 異なる Pod のマウントポイントには他の Pod からアクセスできない（kubelet が分離を保証）
@@ -403,9 +403,9 @@ CSI DaemonSet → sshfs/s3fs を -o allow_other -o umask=000 でマウント
 
 ---
 
-## マルチテナント設計
+## 7. マルチテナント設計
 
-### Capsule Tenant 構成
+### 7.1 Capsule Tenant 構成
 
 ```yaml
 apiVersion: capsule.clastix.io/v1beta2
@@ -424,10 +424,10 @@ spec:
         pod-security.kubernetes.io/warn: baseline
 ```
 
-### Kyverno ポリシー
+### 7.2 Kyverno ポリシー
 
 **hostUsers: false 強制** (`policy/kyverno-force-userns.yaml`):
-- Capsule テナントの通常 Pod に `spec.hostUsers: false` を自動注入（FUSE CSI volume Pod は precondition で除外）
+- Capsule テナントに属する全 Pod に `spec.hostUsers: false` を自動注入
 - ユーザーは意識しなくてよい
 
 **securityContext 自動注入** (`policy/kyverno-force-securecontext.yaml`):
@@ -438,7 +438,7 @@ spec:
   - `containers[*].securityContext.allowPrivilegeEscalation: false`
   - `containers[*].securityContext.capabilities.drop: [ALL]`
 
-### CSI DaemonSet の namespace 分離
+### 7.3 CSI DaemonSet の namespace 分離
 
 `fuse-csi-system` namespace は Capsule テナントに含めない。理由:
 - PSS `privileged` が必要（`restricted` と両立しない）
@@ -446,9 +446,9 @@ spec:
 
 ---
 
-## デプロイ構成
+## 8. デプロイ構成
 
-### デプロイ順序
+### 8.1 デプロイ順序
 
 ```
 1. helm install capsule         (管理者)
@@ -461,7 +461,7 @@ spec:
 8. ユーザーが Secret + Pod を作成
 ```
 
-### GitHub Actions による自動ビルド
+### 8.2 GitHub Actions による自動ビルド
 
 main / feature ブランチへの push で以下のイメージを自動ビルド:
 
@@ -471,7 +471,7 @@ main / feature ブランチへの push で以下のイメージを自動ビル�
 
 ---
 
-## 既知の制約・注意事項
+## 9. 既知の制約・注意事項
 
 | 項目 | 内容 |
 |------|------|
