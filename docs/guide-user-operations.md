@@ -79,7 +79,7 @@ spec:
     # sshfs-sidecar: CSI driver から FUSE fd を受け取り sshfs を起動する
     # restartPolicy: Always → sidecar initContainer（Kubernetes 1.29+）
     - name: sshfs-sidecar
-      image: ghcr.io/tak-labo/fuse_k8s-sshfs-sidecar:latest
+      image: ghcr.io/tak-55/fuse_k8s-sshfs-sidecar:latest
       restartPolicy: Always
       readinessProbe:
         exec:
@@ -185,7 +185,7 @@ spec:
           mountPath: /fuse-dev
 
     - name: s3fs-sidecar
-      image: ghcr.io/tak-labo/fuse_k8s-s3fs-sidecar:latest
+      image: ghcr.io/tak-55/fuse_k8s-s3fs-sidecar:latest
       restartPolicy: Always
       readinessProbe:
         exec:
@@ -267,7 +267,7 @@ spec:
             - name: fuse-device
               mountPath: /fuse-dev
         - name: sshfs-sidecar
-          image: ghcr.io/tak-labo/fuse_k8s-sshfs-sidecar:latest
+          image: ghcr.io/tak-55/fuse_k8s-sshfs-sidecar:latest
           restartPolicy: Always
           readinessProbe:
             exec:

@@ -119,7 +119,7 @@ kubectl create secret generic s3-credentials \
 
 ## CI/CD
 
-GitHub Actions (`.github/workflows/docker-image.yml`) builds multi-platform images (linux/amd64, linux/arm64) on push to main and publishes to `ghcr.io/tak-labo/fuse_k8s-*:latest` with date-sha tags.
+GitHub Actions (`.github/workflows/docker-image.yml`) builds multi-platform images (linux/amd64, linux/arm64) on push to main and publishes to `ghcr.io/tak-55/fuse_k8s-*:latest` with date-sha tags.
 
 ## Adding a New FUSE Filesystem
 

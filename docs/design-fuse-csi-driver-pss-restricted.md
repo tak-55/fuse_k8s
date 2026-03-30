@@ -467,7 +467,7 @@ main / feature ブランチへの push で以下のイメージを自動ビル�
 
 | イメージ | タグ |
 |---------|------|
-| `ghcr.io/tak-labo/fuse_k8s-fuse-csi-driver` | `latest`, `YYYYMMDD-<sha>` |
+| `ghcr.io/tak-55/fuse_k8s-fuse-csi-driver` | `latest`, `YYYYMMDD-<sha>` |
 
 ---
 
