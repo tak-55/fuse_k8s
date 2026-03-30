@@ -75,22 +75,23 @@ spec:
 
   containers:
     - name: app
-      image: your-app-image:latest  # 実際のアプリイメージに変更すること
+      image: busybox:stable
       # securityContext（PSS restricted）は Kyverno が自動注入:
       #   runAsNonRoot: true, runAsUser: 1000
       #   allowPrivilegeEscalation: false, capabilities.drop: [ALL]
       #   seccompProfile: RuntimeDefault
       # FUSE CSI ボリュームがあるため hostUsers は注入されない（MOUNT_ATTR_IDMAP 非対応）
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          echo "=== マウント確認 ==="
+          ls -la /data
+          echo "=== 書き込みテスト ==="
+          echo "hello fd-pass $(date)" > /data/test.txt && cat /data/test.txt
+          sleep infinity
       volumeMounts:
         - name: sshfs-vol
           mountPath: /data
-      resources:
-        requests:
-          cpu: 10m
-          memory: 32Mi
-        limits:
-          cpu: 100m
-          memory: 128Mi
 
   volumes:
     - name: sshfs-vol
