@@ -19,5 +19,7 @@ RUN useradd -u 1000 -m -s /bin/bash appuser
 
 COPY --from=builder /receiver /bin/receiver
 COPY --from=builder /fusermount3-stub /usr/bin/fusermount3
+RUN ln -sf /usr/bin/fusermount3 /usr/bin/fusermount
 RUN chmod 4755 /usr/bin/fusermount3
+RUN chmod 4755 /usr/bin/fusermount
 ENTRYPOINT ["/bin/receiver"]

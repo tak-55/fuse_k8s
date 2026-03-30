@@ -20,5 +20,7 @@ COPY --from=builder /receiver /bin/receiver
 # 本物の fusermount3 を stub に置き換える。
 # stub は mount を実行せず、FUSE_PREOPEN_FD の fd を libfuse に返すだけ。
 COPY --from=builder /fusermount3-stub /usr/bin/fusermount3
+RUN ln -sf /usr/bin/fusermount3 /usr/bin/fusermount
 RUN chmod 4755 /usr/bin/fusermount3
+RUN chmod 4755 /usr/bin/fusermount
 ENTRYPOINT ["/bin/receiver"]
