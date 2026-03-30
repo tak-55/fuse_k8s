@@ -54,6 +54,7 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
+        allowPrivilegeEscalation: true
       # readinessProbe が通過するまで app コンテナの起動を待機する
       readinessProbe:
         exec:
