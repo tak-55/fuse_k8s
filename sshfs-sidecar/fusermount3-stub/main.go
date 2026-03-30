@@ -16,7 +16,7 @@ import (
 func main() {
 	// アンマウント呼び出し（fusermount3 -u /mnt/fuse）は _FUSE_COMMFD なしで呼ばれる。
 	// マウントはすでに CSI driver が管理しているため何もせず正常終了する。
-	commFDStr := os.Getenv("_FUSE_COMMFD")
+	commFDStr := os.Getenv("FUSE_COMMFD")
 	preopenFDStr := os.Getenv("FUSE_PREOPEN_FD")
 
 	if commFDStr == "" || preopenFDStr == "" {
@@ -27,7 +27,7 @@ func main() {
 
 	commFD, err := strconv.Atoi(commFDStr)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fusermount3-stub: _FUSE_COMMFD parse 失敗: %v\n", err)
+		fmt.Fprintf(os.Stderr, "fusermount3-stub: FUSE_COMMFD parse 失敗: %v\n", err)
 		os.Exit(1)
 	}
 	preopenFD, err := strconv.Atoi(preopenFDStr)
