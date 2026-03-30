@@ -36,6 +36,9 @@ spec:
     - name: create-fuse-device
       image: busybox:stable
       command: ["touch", "/fuse-dev/fuse"]
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
       volumeMounts:
         - name: fuse-device
           mountPath: /fuse-dev
