@@ -67,6 +67,9 @@ spec:
   containers:
     - name: app
       image: busybox:stable
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
       # securityContext（PSS restricted）は Kyverno が自動注入:
       #   runAsNonRoot: true, runAsUser: 1000
       #   allowPrivilegeEscalation: false, capabilities.drop: [ALL]
