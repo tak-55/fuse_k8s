@@ -1,11 +1,8 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../csi/fuse-csi-driver.yaml
-  - ../../csi/fuse-csi-driver-daemonset.yaml
   - ../../sshfs/deploy-kind.yaml
   - ../../s3fs/deploy-kind.yaml
 patches:
-  - path: csi-patch.yaml
-  - path: sshfs-patch.yaml
-  - path: s3fs-patch.yaml
+  - path: sshfs-volumes.yaml
+  - path: s3fs-volumes.yaml
