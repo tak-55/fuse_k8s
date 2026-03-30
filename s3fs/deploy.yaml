@@ -46,6 +46,9 @@ spec:
       image: ghcr.io/tak-labo/fuse_k8s-s3fs-sidecar:latest
       imagePullPolicy: Always
       restartPolicy: Always
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
       # readinessProbe が通過するまで app コンテナの起動を待機する
       readinessProbe:
         exec:

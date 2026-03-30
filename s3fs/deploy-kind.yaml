@@ -46,6 +46,9 @@ spec:
       image: s3fs-sidecar:latest
       imagePullPolicy: Never
       restartPolicy: Always
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
       # readinessProbe が通過するまで app コンテナの起動を待機する
       readinessProbe:
         exec:
