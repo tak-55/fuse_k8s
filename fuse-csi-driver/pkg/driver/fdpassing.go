@@ -58,7 +58,7 @@ func openAndMountFuse(targetPath string) (int, error) {
 	// mount options: fd=N で open済みの fd を指定
 	// umask は FUSE カーネルオプションではないため除外（sshfs/s3fs 側で指定）
 	// flags=0: MS_NODEV|MS_NOSUID はコンテナ環境で EINVAL になるため外す
-	mountOpts := fmt.Sprintf("fd=%d,rootmode=40000,user_id=0,group_id=0,allow_other", fusefd)
+	mountOpts := fmt.Sprintf("fd=%d,rootmode=40000,user_id=0,group_id=0,allow_other,default_permissions", fusefd)
 	klog.Infof("FUSE mount 試行: targetPath=%s fd=%d", targetPath, fusefd)
 	if err := unix.Mount("/dev/fuse", targetPath, "fuse", 0, mountOpts); err != nil {
 		unix.Close(fusefd)
