@@ -14,7 +14,10 @@ import (
 )
 
 func main() {
-	commFDStr := os.Getenv("FUSE_COMMFD")
+	commFDStr := os.Getenv("_FUSE_COMMFD")
+	if commFDStr == "" {
+		commFDStr = os.Getenv("FUSE_COMMFD")
+	}
 	preopenFDStr := os.Getenv("FUSE_PREOPEN_FD")
 
 	if commFDStr == "" || preopenFDStr == "" {
