@@ -48,6 +48,10 @@ kubectl get pods -n fuse-csi-system
 kubectl apply -f sshfs/deploy-kind.yaml
 kubectl apply -f s3fs/deploy-kind.yaml
 
+# Or reapply the maintained overlays after git pull
+kubectl apply -k overlays/kind
+kubectl apply -k overlays/prod
+
 # Debug
 kubectl logs <pod> -c sshfs-sidecar
 kubectl exec <pod> -c app -- mount | grep fuse

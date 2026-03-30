@@ -136,6 +136,18 @@ kubectl apply -f sshfs/deploy.yaml -n <tenant-namespace>
 kubectl apply -f s3fs/deploy.yaml -n <tenant-namespace>
 ```
 
+### 上書き用 manifest
+
+`git pull` のたびに手作業で修正したくない場合は、overlay を再適用します。
+
+```bash
+# kind / ローカル検証
+kubectl apply -k overlays/kind
+
+# 本番想定
+kubectl apply -k overlays/prod
+```
+
 ## プライベートリポジトリのイメージを使う場合
 
 `ghcr.io` などのプライベートレジストリを使う場合は、namespace ごとに `imagePullSecret` を設定します。
