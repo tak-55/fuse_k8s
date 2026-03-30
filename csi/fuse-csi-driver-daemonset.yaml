@@ -106,6 +106,8 @@ spec:
           args:
             - --csi-address=/csi/csi.sock
             - --kubelet-registration-path=/var/lib/kubelet/plugins/fuse.csi.fuse-k8s.io/csi.sock
+          securityContext:
+            runAsNonRoot: false
           resources:
             requests:
               cpu: 10m
