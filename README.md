@@ -138,14 +138,15 @@ kubectl apply -f s3fs/deploy.yaml -n <tenant-namespace>
 
 ### 上書き用 manifest
 
-`git pull` のたびに手作業で修正したくない場合は、`volumeAttributes` だけを差し替える overlay を再適用します。
+`git pull` のたびに手作業で修正したくない場合は、`overlays/local/` に置いたローカル専用 overlay を再適用します。  
+`overlays/local/` は `.gitignore` されているので、`git pull` で上書きされません。
 
 ```bash
 # kind / ローカル検証（例）
-kubectl apply -k overlays/kind
+kubectl apply -k overlays/local/kind
 
 # 本番想定（例）
-kubectl apply -k overlays/prod
+kubectl apply -k overlays/local/prod
 ```
 
 ## プライベートリポジトリのイメージを使う場合
