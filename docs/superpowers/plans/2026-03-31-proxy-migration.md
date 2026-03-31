@@ -991,7 +991,7 @@ spec:
     # sshfs-sidecar: creds.json を読んで sshfs を起動するサイドカー
     # restartPolicy: Always → sidecar initContainer（app より先に起動、app と並行して稼働）
     - name: sshfs-sidecar
-      image: ghcr.io/tak-55/fuse_k8s-sshfs-sidecar:latest
+      image: ghcr.io/tak-55/sshfs-sidecar:latest
       imagePullPolicy: Always
       restartPolicy: Always
       env:
@@ -1097,7 +1097,7 @@ spec:
           mountPath: /fuse-dev
 
     - name: s3fs-sidecar
-      image: ghcr.io/tak-55/fuse_k8s-s3fs-sidecar:latest
+      image: ghcr.io/tak-55/s3fs-sidecar:latest
       imagePullPolicy: Always
       restartPolicy: Always
       env:

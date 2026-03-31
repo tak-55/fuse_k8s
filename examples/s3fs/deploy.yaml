@@ -46,7 +46,7 @@ spec:
     # s3fs-sidecar: FUSE fd を受け取り s3fs を起動するサイドカー
     # restartPolicy: Always → sidecar initContainer（app より先に起動、app と並行して稼働）
     - name: s3fs-sidecar
-      image: ghcr.io/tak-55/fuse_k8s-s3fs-sidecar:latest
+      image: ghcr.io/tak-55/s3fs-sidecar:latest
       imagePullPolicy: Always
       restartPolicy: Always
       securityContext:
