@@ -60,7 +60,30 @@ volumes:
         noCheckCert: "false"
 ```
 
-### 4) Pod をデプロイ
+### 4) セキュリティコンテキストの確認
+
+マニフェストには PSS (Pod Security Standards) restricted に対応するため、すべてのコンテナに以下が設定されています：
+
+```yaml
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
+```
+
+**役割：**
+- `allowPrivilegeEscalation: false` — 権限昇格を防止
+- `capabilities.drop: ["ALL"]` — すべての Linux capabilities を削除（最小権限）
+- `seccompProfile: RuntimeDefault` — デフォルト seccomp フィルタを適用
+- `runAsNonRoot: true` / `runAsUser: 1000` — 非root ユーザーで実行
+
+これにより、PSS restricted namespace（`enforce: restricted`）でもポッドをデプロイできます。
+
+### 5) Pod をデプロイ
 
 ```bash
 kubectl apply -f my-s3fs-pod.yaml -n <tenant-namespace>
