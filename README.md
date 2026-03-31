@@ -1,4 +1,4 @@
-# FUSE CSI Driver
+# FUSE CSI Driver for Kubernetes
 
 このリポジトリは、Kubernetes で FUSE（sshfs/s3fs）を使うための **CSI ドライバー実装**です。  
 ポイントは、ユーザー Pod を非特権のまま維持しつつ、必要な特権処理だけを管理者側 DaemonSet に分離していることです。
