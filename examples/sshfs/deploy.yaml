@@ -1,33 +1,35 @@
 # =============================================================================
 # fd-passing アーキテクチャ用 Pod サンプル（本番環境）
-# s3fs-sidecar が FUSE データプレーンを担当する
+# sshfs-sidecar が FUSE データプレーンを担当する
 #
 # 使い方:
-#   1. S3 認証情報 Secret を作成
-#      kubectl create secret generic s3-credentials \
-#        --from-literal=access_key=YOUR_ACCESS_KEY \
-#        --from-literal=secret_key=YOUR_SECRET_KEY \
+#   1. SSH 秘密鍵 Secret を作成（--from-file を使うこと）
+#      kubectl create secret generic ssh-key \
+#        --from-file=private_key=~/.ssh/id_ed25519 \
 #        -n <tenant-namespace>
 #
-#   2. volumeAttributes の bucket / endpoint を実環境に合わせて変更
+#   2. volumeAttributes の host / user / remotePath を実環境に合わせて変更
 #
 #   3. Pod をデプロイ
-#      kubectl apply -f s3fs/deploy.yaml -n <tenant-namespace>
+#      kubectl apply -f examples/sshfs/deploy.yaml -n <tenant-namespace>
 #
 # 注意:
 #   - FUSE CSI ボリュームを持つ Pod は hostUsers: false が Kyverno から自動除外される
 #     （/dev/fuse FUSE は MOUNT_ATTR_IDMAP 非対応のため）
 #   - securityContext（PSS restricted）は Kyverno が自動注入
+#   - 秘密鍵は --from-literal ではなく --from-file で作成すること
+#     （--from-literal はシェル展開で末尾改行を除去するため error in libcrypto が発生する）
+#   - SSH サーバー側は SFTP + ChrootDirectory 構成を推奨（docs/design-sftp-chroot-ssh-server.md）
 # =============================================================================
 apiVersion: v1
 kind: Pod
 metadata:
-  name: s3fs-example
+  name: sshfs-example
   # namespace は Capsule テナント namespace に変更すること
 spec:
-  # s3fs-sidecar を sidecar initContainer として定義する。
-  # FUSE デーモン（s3fs）が起動し /fuse-fd/ready を書いた後に app コンテナが起動する。
-  # これにより FUSE bind mount が s3fs 起動前に runc でタイムアウトする問題を回避する。
+  # sshfs-sidecar を sidecar initContainer として定義する。
+  # FUSE デーモン（sshfs）が起動し /fuse-fd/ready を書いた後に app コンテナが起動する。
+  # これにより FUSE bind mount が sshfs 起動前に runc でタイムアウトする問題を回避する。
   # （Kubernetes 1.29+ の sidecar initContainer 機能を使用）
   initContainers:
     # /dev/fuse 用の空ファイルを作成（libfuse が stat("/dev/fuse") を要求するため）
@@ -43,16 +45,19 @@ spec:
         - name: fuse-device
           mountPath: /fuse-dev
 
-    # s3fs-sidecar: FUSE fd を受け取り s3fs を起動するサイドカー
+    # sshfs-sidecar: FUSE fd を受け取り sshfs を起動するサイドカー
     # restartPolicy: Always → sidecar initContainer（app より先に起動、app と並行して稼働）
-    - name: s3fs-sidecar
-      image: ghcr.io/tak-55/fuse_k8s-s3fs-sidecar:latest
+    - name: sshfs-sidecar
+      image: ghcr.io/tak-55/fuse_k8s-sshfs-sidecar:latest
       imagePullPolicy: Always
       restartPolicy: Always
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         allowPrivilegeEscalation: true
+      env:
+        - name: FUSERMOUNT3PROXY_FDPASSING_SOCKPATH
+          value: "/fuse-fd/csi.sock"
       # readinessProbe が通過するまで app コンテナの起動を待機する
       readinessProbe:
         exec:
@@ -92,26 +97,26 @@ spec:
           echo "=== マウント確認 ==="
           ls -la /data
           echo "=== 書き込みテスト ==="
-          echo "hello s3 fd-pass $(date)" > /data/test.txt && cat /data/test.txt
+          echo "hello fd-pass $(date)" > /data/test.txt && cat /data/test.txt
           sleep infinity
       volumeMounts:
-        - name: s3fs-vol
+        - name: sshfs-vol
           mountPath: /data
 
   volumes:
-    - name: s3fs-vol
+    - name: sshfs-vol
       csi:
         driver: fuse.csi.fuse-k8s.io
         volumeAttributes:
-          type: s3fs
-          bucket: "your-bucket"
-          endpoint: "https://your-s3-endpoint"   # MinIO: http://minio.svc:9000 / AWS: https://s3.amazonaws.com
-          region: "us-east-1"
-          noCheckCert: "false"                    # 自己署名証明書の場合は "true"
+          type: sshfs
+          host: "your-ssh-host"         # SSH サーバーのホスト名/IP または Service DNS 名
+          user: "your-user"             # SSH ユーザー名
+          remotePath: "/data"           # マウントするリモートパス（SFTP chroot 内のパス）
+          port: "22"
+          strictHostKeyCheck: "accept-new"  # 本番: accept-new / テスト: false
         nodePublishSecretRef:
-          name: s3-credentials          # kubectl create secret generic s3-credentials \
-                                        #   --from-literal=access_key=KEY \
-                                        #   --from-literal=secret_key=SECRET \
+          name: ssh-key                 # kubectl create secret generic ssh-key \
+                                        #   --from-file=private_key=~/.ssh/id_ed25519 \
                                         #   -n <namespace>
     - name: fuse-fd
       emptyDir: {}
