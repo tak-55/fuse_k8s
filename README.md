@@ -106,13 +106,13 @@ kubectl logs -n fuse-csi-system -l app=fuse-csi-driver --tail=100
 
 ## セットアップ（テナントユーザー）
 
-基本手順は「Secret 作成 → `deploy.yaml` の `volumeAttributes` 編集 → デプロイ」です。
+基本手順は「Secret 作成 → マニフェストをコピー → カスタマイズ → デプロイ」です。
 実装別の詳細は各 README を参照してください。
 
 - sshfs: [`examples/sshfs/README.md`](./examples/sshfs/README.md)
 - s3fs: [`examples/s3fs/README.md`](./examples/s3fs/README.md)
 
-### Secret 作成例
+### 1) Secret 作成
 
 ```bash
 # sshfs
@@ -127,24 +127,24 @@ kubectl create secret generic s3-credentials \
   -n <tenant-namespace>
 ```
 
-### デプロイ例
+### 2) マニフェストをコピー
 
 ```bash
-kubectl apply -f examples/sshfs/deploy.yaml -n <tenant-namespace>
-kubectl apply -f examples/s3fs/deploy.yaml -n <tenant-namespace>
+# sshfs の場合
+cp examples/sshfs/deploy.yaml ./my-sshfs-deploy.yaml
+
+# s3fs の場合
+cp examples/s3fs/deploy.yaml ./my-s3fs-deploy.yaml
 ```
 
-### 上書き用 manifest
+### 3) カスタマイズして適用
 
-`git pull` のたびに手作業で修正したくない場合は、`overlays/local/` に置いたローカル専用 overlay を再適用します。  
-`overlays/local/` は `.gitignore` されているので、`git pull` で上書きされません。
+マニフェストを編集し、`volumeAttributes` やコンテナイメージ、Secret 名などを環境に合わせて変更します。
 
 ```bash
-# kind / ローカル検証（例）
-kubectl apply -k overlays/local/kind
-
-# 本番想定（例）
-kubectl apply -k overlays/local/prod
+kubectl apply -f ./my-sshfs-deploy.yaml -n <tenant-namespace>
+# または
+kubectl apply -f ./my-s3fs-deploy.yaml -n <tenant-namespace>
 ```
 
 ## プライベートリポジトリのイメージを使う場合
@@ -221,10 +221,6 @@ fuse-k8s/
 ├── examples/               # ユーザー Pod マニフェスト + README
 │   ├── sshfs/              # sshfs 用 deploy.yaml, README
 │   └── s3fs/               # s3fs 用 deploy.yaml, README
-├── overlays/               # Kustomize overlays（本番 / kind / ローカル）
-│   ├── prod/
-│   ├── kind/
-│   └── local/              # .gitignore で除外（ローカル変更用）
 └── docs/                   # ドキュメント
     └── superpowers/
 ```
