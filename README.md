@@ -1,4 +1,4 @@
-# FUSE CSI Driver for Kubernetes (PSS Restricted)
+# FUSE CSI Driver
 
 このリポジトリは、Kubernetes で FUSE（sshfs/s3fs）を使うための **CSI ドライバー実装**です。  
 ポイントは、ユーザー Pod を非特権のまま維持しつつ、必要な特権処理だけを管理者側 DaemonSet に分離していることです。
@@ -13,8 +13,8 @@
 
 | ファイルシステム | 用途 | 詳細 |
 |---|---|---|
-| `sshfs` | SSH/SFTP サーバー上のディレクトリをマウント | [`sshfs/README.md`](./sshfs/README.md) |
-| `s3fs` | S3 互換ストレージ（AWS S3, MinIO など）をマウント | [`s3fs/README.md`](./s3fs/README.md) |
+| `sshfs` | SSH/SFTP サーバー上のディレクトリをマウント | [`examples/sshfs/README.md`](./examples/sshfs/README.md) |
+| `s3fs` | S3 互換ストレージ（AWS S3, MinIO など）をマウント | [`examples/s3fs/README.md`](./examples/s3fs/README.md) |
 
 ## アーキテクチャ（概要）
 
@@ -106,11 +106,11 @@ kubectl logs -n fuse-csi-system -l app=fuse-csi-driver --tail=100
 
 ## セットアップ（テナントユーザー）
 
-基本手順は「Secret 作成 → `deploy.yaml` の `volumeAttributes` 編集 → デプロイ」です。  
+基本手順は「Secret 作成 → `deploy.yaml` の `volumeAttributes` 編集 → デプロイ」です。
 実装別の詳細は各 README を参照してください。
 
-- sshfs: [`sshfs/README.md`](./sshfs/README.md)
-- s3fs: [`s3fs/README.md`](./s3fs/README.md)
+- sshfs: [`examples/sshfs/README.md`](./examples/sshfs/README.md)
+- s3fs: [`examples/s3fs/README.md`](./examples/s3fs/README.md)
 
 ### Secret 作成例
 
@@ -130,8 +130,8 @@ kubectl create secret generic s3-credentials \
 ### デプロイ例
 
 ```bash
-kubectl apply -f sshfs/deploy.yaml -n <tenant-namespace>
-kubectl apply -f s3fs/deploy.yaml -n <tenant-namespace>
+kubectl apply -f examples/sshfs/deploy.yaml -n <tenant-namespace>
+kubectl apply -f examples/s3fs/deploy.yaml -n <tenant-namespace>
 ```
 
 ### 上書き用 manifest
@@ -173,7 +173,7 @@ kubectl create secret docker-registry ghcr-secret \
   -n <tenant-namespace>
 ```
 
-`sshfs/deploy.yaml` または `s3fs/deploy.yaml` の Pod spec に `imagePullSecrets` を追加します。
+`examples/sshfs/deploy.yaml` または `examples/s3fs/deploy.yaml` の Pod spec に `imagePullSecrets` を追加します。
 
 ```yaml
 spec:
@@ -189,7 +189,7 @@ spec:
 | 主な接続先 | SSH サーバー | AWS S3 / MinIO / Ceph |
 | Secret キー | `private_key` | `access_key`, `secret_key` |
 | 主な `volumeAttributes` | `host`, `user`, `remotePath`, `port` | `bucket`, `endpoint`, `region` |
-| 詳細手順 | [`sshfs/README.md`](./sshfs/README.md) | [`s3fs/README.md`](./s3fs/README.md) |
+| 詳細手順 | [`examples/sshfs/README.md`](./examples/sshfs/README.md) | [`examples/s3fs/README.md`](./examples/s3fs/README.md) |
 
 ## よくある確認ポイント
 
@@ -206,14 +206,27 @@ spec:
 ## ディレクトリ構成
 
 ```text
-tak_fuse_k8s/
+fuse-k8s/
 ├── README.md
 ├── csi/                    # CSI ドライバー配布マニフェスト
 ├── fuse-csi-driver/        # CSI ドライバー実装（Go）
+│   ├── cmd/
+│   └── pkg/
 ├── sshfs-sidecar/          # sshfs 用 sidecar 実装（fd 受信）
+│   ├── receiver/           # creds.json 読み込み・sshfs 起動
+│   └── fusermount3-proxy/  # libfuse ↔ CSI fd-passing 仲介
 ├── s3fs-sidecar/           # s3fs 用 sidecar 実装（fd 受信）
-├── sshfs/                  # sshfs 用ユーザー Pod マニフェスト + README
-└── s3fs/                   # s3fs 用ユーザー Pod マニフェスト + README
+│   ├── receiver/
+│   └── fusermount3-proxy/
+├── examples/               # ユーザー Pod マニフェスト + README
+│   ├── sshfs/              # sshfs 用 deploy.yaml, README
+│   └── s3fs/               # s3fs 用 deploy.yaml, README
+├── overlays/               # Kustomize overlays（本番 / kind / ローカル）
+│   ├── prod/
+│   ├── kind/
+│   └── local/              # .gitignore で除外（ローカル変更用）
+└── docs/                   # ドキュメント
+    └── superpowers/
 ```
 
 ## 運用メモ
