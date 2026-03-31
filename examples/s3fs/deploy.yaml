@@ -39,6 +39,11 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        seccompProfile:
+          type: RuntimeDefault
       volumeMounts:
         - name: fuse-device
           mountPath: /fuse-dev
@@ -52,7 +57,11 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
-        allowPrivilegeEscalation: true
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        seccompProfile:
+          type: RuntimeDefault
       env:
         - name: FUSERMOUNT3PROXY_FDPASSING_SOCKPATH
           value: "/fuse-fd/csi.sock"
@@ -84,6 +93,11 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        seccompProfile:
+          type: RuntimeDefault
       # securityContext（PSS restricted）は Kyverno が自動注入:
       #   runAsNonRoot: true, runAsUser: 1000
       #   allowPrivilegeEscalation: false, capabilities.drop: [ALL]
