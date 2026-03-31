@@ -117,7 +117,7 @@ kubectl logs -n fuse-csi-system -l app=fuse-csi-driver --tail=100
 ```bash
 # sshfs
 kubectl create secret generic ssh-key \
-  --from-file=private_key=~/.ssh/id_ed25519 \
+  --from-file=private_key=~/.ssh/sshfs_key \
   -n <tenant-namespace>
 
 # s3fs
