@@ -93,7 +93,7 @@ graph TB
 
 ```bash
 kubectl apply -f csi/fuse-csi-driver.yaml
-kubectl apply -f csi/fuse-csi-driver-daemonset-prod.yaml
+kubectl apply -f csi/fuse-csi-driver-daemonset.yaml
 kubectl get pods -n fuse-csi-system
 ```
 
@@ -161,7 +161,7 @@ kubectl create secret docker-registry ghcr-secret \
   -n fuse-csi-system
 ```
 
-その後、`csi/fuse-csi-driver-daemonset-prod.yaml` の `imagePullSecrets` に `ghcr-secret` を設定して再適用します。
+その後、`csi/fuse-csi-driver-daemonset.yaml` の `imagePullSecrets` に `ghcr-secret` を設定して再適用します。
 
 ### 2) テナント側（ユーザー Pod 用 sidecar）
 
