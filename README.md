@@ -72,8 +72,6 @@ graph TB
 - `hostUsers: false` は通常 Pod に適用
 - FUSE CSI volume を持つ Pod は互換性のため `hostUsers: false` 注入を自動スキップ
 
-関連マニフェスト: `policy/`
-
 ### 権限の分離
 
 | コンポーネント | namespace | 特権 | 管理主体 |
@@ -215,12 +213,9 @@ tak_fuse_k8s/
 ├── sshfs-sidecar/          # sshfs 用 sidecar 実装（fd 受信）
 ├── s3fs-sidecar/           # s3fs 用 sidecar 実装（fd 受信）
 ├── sshfs/                  # sshfs 用ユーザー Pod マニフェスト + README
-├── s3fs/                   # s3fs 用ユーザー Pod マニフェスト + README
-├── policy/                 # Capsule / Kyverno ポリシー
-└── tests/                  # テスト手順・検証マニフェスト
+└── s3fs/                   # s3fs 用ユーザー Pod マニフェスト + README
 ```
 
 ## 運用メモ
 
-- kind 検証手順は `tests/README.md` を参照
 - CI は `main` push でマルチアーキテクチャイメージを publish
