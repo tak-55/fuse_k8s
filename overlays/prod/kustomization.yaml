@@ -1,8 +1,0 @@
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - ../../sshfs/deploy.yaml
-  - ../../s3fs/deploy.yaml
-patches:
-  - path: sshfs-volumes.yaml
-  - path: s3fs-volumes.yaml
