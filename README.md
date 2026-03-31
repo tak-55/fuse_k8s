@@ -54,10 +54,10 @@ graph TB
 
 ### 動作原理（詳細）
 
-1. CSI DaemonSet（`fuse-csi-system`）が `NodePublishVolume` で `/dev/fuse` を open  
-2. CSI 側でマウント準備を行い、UDS (`/fuse-fd/csi.sock`) を待受  
-3. sidecar receiver が UDS 接続し、`SCM_RIGHTS` で FUSE fd を受信  
-4. `fusermount3-stub` が libfuse 呼び出しを受け、受信済み fd を注入  
+1. CSI DaemonSet（`fuse-csi-system`）が `NodePublishVolume` で `/dev/fuse` を open
+2. CSI 側でマウント準備を行い、UDS (`/fuse-fd/csi.sock`) を待受
+3. sidecar receiver が UDS 接続し、`SCM_RIGHTS` で FUSE fd を受信
+4. `fusermount3-proxy` が libfuse 呼び出しを受け、受信済み fd を注入
 5. ユーザーアプリは `/data` へ通常 I/O（読み書き）を実行
 
 ## セキュリティモデル
