@@ -72,7 +72,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "passwd-s3fs 書き込み失敗: %v\n", err)
 		os.Exit(1)
 	}
-	passwdFile.Chmod(0600)
+	if err := passwdFile.Chmod(0600); err != nil {
+		passwdFile.Close()
+		os.Remove(passwdName)
+		fmt.Fprintf(os.Stderr, "passwd-s3fs chmod 失敗: %v\n", err)
+		os.Exit(1)
+	}
 	passwdFile.Close()
 
 	region := params.Region

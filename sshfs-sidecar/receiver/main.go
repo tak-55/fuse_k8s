@@ -71,7 +71,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "鍵ファイル書き込み失敗: %v\n", err)
 		os.Exit(1)
 	}
-	keyFile.Chmod(0600)
+	if err := keyFile.Chmod(0600); err != nil {
+		keyFile.Close()
+		os.Remove(keyName)
+		fmt.Fprintf(os.Stderr, "鍵ファイル chmod 失敗: %v\n", err)
+		os.Exit(1)
+	}
 	keyFile.Close()
 
 	port := params.Port
