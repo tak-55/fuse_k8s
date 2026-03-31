@@ -18,6 +18,7 @@ const (
 	fuseEmptyDirName = "fuse-fd"  // User Pod の emptyDir volume 名（規約）
 	fuseSocketName   = "csi.sock"
 	fuseParamsName   = "params.json"
+	fuseCredsName    = "creds.json"
 	kubeletPodsDir   = "/var/lib/kubelet/pods"
 )
 
@@ -34,7 +35,7 @@ type FuseParams struct {
 	NoCheckCert string `json:"noCheckCert,omitempty"`
 }
 
-// FuseCreds は UDS 経由でサイドカーに送信する（認証情報）
+// FuseCreds は emptyDir の creds.json に書き出す（認証情報）
 type FuseCreds struct {
 	PrivateKey string `json:"private_key,omitempty"`
 	AccessKey  string `json:"access_key,omitempty"`
@@ -55,10 +56,7 @@ func openAndMountFuse(targetPath string) (int, error) {
 		return 0, fmt.Errorf("open /dev/fuse 失敗: %w", err)
 	}
 
-	// mount options: fd=N で open済みの fd を指定
-	// umask は FUSE カーネルオプションではないため除外（sshfs/s3fs 側で指定）
-	// flags=0: MS_NODEV|MS_NOSUID はコンテナ環境で EINVAL になるため外す
-	mountOpts := fmt.Sprintf("fd=%d,rootmode=40000,user_id=0,group_id=0,allow_other", fusefd)
+	mountOpts := fmt.Sprintf("fd=%d,rootmode=40000,user_id=0,group_id=0,allow_other,default_permissions", fusefd)
 	klog.Infof("FUSE mount 試行: targetPath=%s fd=%d", targetPath, fusefd)
 	if err := unix.Mount("/dev/fuse", targetPath, "fuse", 0, mountOpts); err != nil {
 		unix.Close(fusefd)
@@ -69,8 +67,8 @@ func openAndMountFuse(targetPath string) (int, error) {
 	return fusefd, nil
 }
 
-// startFdServer writes params.json to emptyDir and starts a background UDS server
-// that sends credentials + fusefd to the sidecar when it connects.
+// startFdServer writes params.json and creds.json to emptyDir, then starts a background UDS server
+// that sends fusefd to fusermount3-proxy when it connects.
 // Returns stopFn to shut down the server (call from NodeUnpublishVolume).
 func startFdServer(emptyDir string, params FuseParams, creds FuseCreds, fusefd int) (func(), error) {
 	if err := os.MkdirAll(emptyDir, 0755); err != nil {
@@ -86,15 +84,27 @@ func startFdServer(emptyDir string, params FuseParams, creds FuseCreds, fusefd i
 		return nil, fmt.Errorf("params.json 書き込み失敗: %w", err)
 	}
 
+	// Write creds.json (credentials — restricted permissions, chown to UID 1000)
+	credsJSON, err := json.Marshal(creds)
+	if err != nil {
+		return nil, err
+	}
+	credsPath := filepath.Join(emptyDir, fuseCredsName)
+	if err := os.WriteFile(credsPath, credsJSON, 0600); err != nil {
+		return nil, fmt.Errorf("creds.json 書き込み失敗: %w", err)
+	}
+	if err := os.Chown(credsPath, 1000, 1000); err != nil {
+		klog.Warningf("creds.json chown 失敗（UID 1000 で読めない可能性）: %v", err)
+	}
+
 	socketPath := filepath.Join(emptyDir, fuseSocketName)
 	os.Remove(socketPath)
 	l, err := net.Listen("unix", socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("UDS サーバー起動失敗 (%s): %w", socketPath, err)
 	}
-	// 0666: CSI DaemonSet (root) が作成するが、サイドカー (UID 1000) が接続する必要がある。
+	// 0666: CSI DaemonSet (root) が作成するが、サイドカー (UID 1000) 内の fusermount3-proxy が接続する。
 	// このソケットは Pod 固有の emptyDir 内にあり、同一 Pod のコンテナのみがアクセス可能。
-	// 他の Pod はこのパスを hostPath マウントしない限りアクセスできないため、リスクは低い。
 	if err := os.Chmod(socketPath, 0666); err != nil {
 		l.Close()
 		return nil, err
@@ -112,14 +122,13 @@ func startFdServer(emptyDir string, params FuseParams, creds FuseCreds, fusefd i
 					return
 				default:
 				}
-				// タイムアウトエラーの場合はループ継続（サイドカー起動待ち）
 				if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
 					continue
 				}
 				klog.Warningf("UDS accept エラー (socket=%s): %v", socketPath, err)
 				return
 			}
-			go sendFdToSidecar(conn.(*net.UnixConn), creds, fusefd)
+			go sendFdToProxy(conn.(*net.UnixConn), fusefd)
 		}
 	}()
 
@@ -128,6 +137,7 @@ func startFdServer(emptyDir string, params FuseParams, creds FuseCreds, fusefd i
 		l.Close()
 		os.Remove(socketPath)
 		os.Remove(filepath.Join(emptyDir, fuseParamsName))
+		os.Remove(filepath.Join(emptyDir, fuseCredsName))
 	}
 	return stopFn, nil
 }
@@ -138,18 +148,13 @@ func closeFuse(fusefd int, targetPath string) {
 	unix.Unmount(targetPath, unix.MNT_DETACH)
 }
 
-// sendFdToSidecar sends credentials JSON and fusefd (via SCM_RIGHTS) to the sidecar.
-func sendFdToSidecar(conn *net.UnixConn, creds FuseCreds, fusefd int) {
+// sendFdToProxy sends fusefd (via SCM_RIGHTS) to fusermount3-proxy.
+func sendFdToProxy(conn *net.UnixConn, fusefd int) {
 	defer conn.Close()
-	credJSON, err := json.Marshal(creds)
-	if err != nil {
-		klog.Errorf("creds JSON marshal 失敗: %v", err)
-		return
-	}
 	rights := unix.UnixRights(fusefd)
-	if _, _, err := conn.WriteMsgUnix(credJSON, rights, nil); err != nil {
+	if _, _, err := conn.WriteMsgUnix([]byte{0}, rights, nil); err != nil {
 		klog.Errorf("fd 送信失敗 (fd=%d): %v", fusefd, err)
 		return
 	}
-	klog.Infof("fusefd=%d をサイドカーに送信完了", fusefd)
+	klog.Infof("fusefd=%d を fusermount3-proxy に送信完了", fusefd)
 }
