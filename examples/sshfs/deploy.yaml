@@ -100,11 +100,6 @@ spec:
           drop: ["ALL"]
         seccompProfile:
           type: RuntimeDefault
-      # securityContext（PSS restricted）は Kyverno が自動注入:
-      #   runAsNonRoot: true, runAsUser: 1000
-      #   allowPrivilegeEscalation: false, capabilities.drop: [ALL]
-      #   seccompProfile: RuntimeDefault
-      # FUSE CSI ボリュームがあるため hostUsers は注入されない（MOUNT_ATTR_IDMAP 非対応）
       command: ["/bin/sh", "-c"]
       args:
         - |
