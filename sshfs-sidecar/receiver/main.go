@@ -65,10 +65,14 @@ func main() {
 		fmt.Fprintf(os.Stderr, "鍵ファイル作成失敗: %v\n", err)
 		os.Exit(1)
 	}
-	keyFile.WriteString(creds.PrivateKey)
+	keyName := keyFile.Name()
+	if _, err := keyFile.WriteString(creds.PrivateKey); err != nil {
+		os.Remove(keyName)
+		fmt.Fprintf(os.Stderr, "鍵ファイル書き込み失敗: %v\n", err)
+		os.Exit(1)
+	}
 	keyFile.Chmod(0600)
 	keyFile.Close()
-	defer os.Remove(keyFile.Name())
 
 	port := params.Port
 	if port == "" {
@@ -76,6 +80,7 @@ func main() {
 	}
 
 	if err := os.MkdirAll("/mnt/fuse", 0755); err != nil {
+		os.Remove(keyName)
 		fmt.Fprintf(os.Stderr, "/mnt/fuse 作成失敗: %v\n", err)
 		os.Exit(1)
 	}
@@ -101,6 +106,7 @@ func main() {
 
 	readyPath := "/fuse-fd/ready"
 	if err := cmd.Start(); err != nil {
+		os.Remove(keyName)
 		fmt.Fprintf(os.Stderr, "sshfs 起動失敗: %v\n", err)
 		os.Exit(1)
 	}
@@ -108,9 +114,11 @@ func main() {
 	fmt.Println("sshfs プロセス起動完了 → /fuse-fd/ready 書き込み済み")
 
 	if err := cmd.Wait(); err != nil {
+		os.Remove(keyName)
 		fmt.Fprintf(os.Stderr, "sshfs 終了: %v\n", err)
 		os.Remove(readyPath)
 		os.Exit(1)
 	}
+	os.Remove(keyName)
 	os.Remove(readyPath)
 }
